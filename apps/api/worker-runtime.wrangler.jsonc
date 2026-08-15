@@ -1,0 +1,32 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mahjong-api-runtime-test",
+  "main": "tests/worker_runtime.py",
+  "base_dir": "app",
+  "compatibility_date": "2026-08-15",
+  "compatibility_flags": [
+    "python_workers",
+    "python_dedicated_snapshot"
+  ],
+  "secrets": {
+    "required": [
+      "SUPABASE_URL",
+      "SUPABASE_PUBLISHABLE_KEY",
+      "FRONTEND_ORIGIN"
+    ]
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "GAME_ROOM",
+        "class_name": "TestGameRoom"
+      }
+    ]
+  },
+  "exports": {
+    "TestGameRoom": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  }
+}
