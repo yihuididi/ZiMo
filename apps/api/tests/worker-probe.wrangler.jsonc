@@ -1,0 +1,15 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "mahjong-api-probe",
+  "main": "worker-probe.mjs",
+  "compatibility_date": "2026-08-15",
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "GAME_ROOM",
+        "class_name": "TestGameRoom",
+        "script_name": "mahjong-api-runtime-test"
+      }
+    ]
+  }
+}

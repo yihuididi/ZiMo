@@ -2,10 +2,18 @@ from typing import Any
 
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
-from workers import DurableObject, Response, WorkerEntrypoint
+from workers import DurableObject, WorkerEntrypoint
 
-from config import Settings
-from supabase_client import create_supabase_client
+if __package__:
+    from .config import Settings
+    from .persistence import RoomRepository
+    from .room import RoomOrchestrator
+    from .supabase_client import create_supabase_client
+else:  # Python Workers load ``app/main.py`` from the app directory.
+    from config import Settings
+    from persistence import RoomRepository
+    from room import RoomOrchestrator
+    from supabase_client import create_supabase_client
 
 
 class EnvironmentCORSMiddleware:
@@ -56,7 +64,25 @@ class Default(WorkerEntrypoint):
 
 
 class GameRoom(DurableObject):
-    """Deployment skeleton for a future Mahjong table."""
+    """Cloudflare adapter for one authoritative, SQLite-backed room."""
 
-    async def fetch(self, request: Any) -> Response:
-        return Response("GameRoom is not implemented", status=501)
+    def __init__(self, ctx: Any, env: Any) -> None:
+        super().__init__(ctx, env)
+
+        repository = RoomRepository.from_durable_storage(self.ctx.storage)
+        self._orchestrator = RoomOrchestrator(repository)
+
+        async def initialize_schema() -> None:
+            repository.initialize_schema()
+
+        self.ctx.blockConcurrencyWhile(initialize_schema)
+
+    async def initialize_room(self, snapshot_json: str) -> str:
+        """Persist the first canonical room snapshot through internal RPC."""
+        state = self._orchestrator.initialize_room(snapshot_json)
+        return state.canonical_json()
+
+    async def load_room(self) -> str | None:
+        """Load the canonical room snapshot through internal RPC."""
+        state = self._orchestrator.load_room()
+        return state.canonical_json() if state is not None else None

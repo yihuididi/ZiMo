@@ -5,7 +5,11 @@
   "engines": {
     "node": ">=22.12.0"
   },
+  "scripts": {
+    "test:worker": "vitest run --config vitest.config.mjs"
+  },
   "devDependencies": {
+    "vitest": "^4.1.0",
     "wrangler": "^4.123.0"
   }
 }

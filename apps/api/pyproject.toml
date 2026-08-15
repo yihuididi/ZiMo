@@ -5,12 +5,19 @@ description = "FastAPI infrastructure for the Mahjong Cloudflare Worker"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi",
-    "pydantic",
+    # Domain code stays on the Worker-supported Pydantic 2.10 API surface.
+    # CPython may resolve a later 2.x release because retained Supabase does.
+    "pydantic>=2.10,<3",
     "supabase",
 ]
 
 [dependency-groups]
 dev = [
+    "pytest>=8.3,<9",
     "workers-py",
     "workers-runtime-sdk",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
