@@ -7,6 +7,13 @@
     "python_workers",
     "python_dedicated_snapshot"
   ],
+  "secrets": {
+    "required": [
+      "SUPABASE_URL",
+      "SUPABASE_PUBLISHABLE_KEY",
+      "FRONTEND_ORIGIN"
+    ]
+  },
   "durable_objects": {
     "bindings": [
       {
