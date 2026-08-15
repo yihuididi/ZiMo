@@ -31,20 +31,9 @@ supabase/    Supabase CLI project configuration
 - Python 3.13 or newer
 - [uv](https://docs.astral.sh/uv/)
 
-## Frontend development
+## Local development
 
-```bash
-cd apps/web
-cp .env.example .env.local
-npm install
-npm run dev
-```
-
-Set `VITE_API_URL=http://localhost:8787` in `.env.local` to test the local API.
-The Supabase variables are reserved for later integration; no authentication or
-database queries are implemented yet.
-
-## Backend development
+Set up and start the API:
 
 ```bash
 cd apps/api
@@ -54,40 +43,63 @@ uv sync
 uv run pywrangler dev
 ```
 
-`npm install` installs the project-local Cloudflare Wrangler CLI. `uv sync`
-installs the Python dependencies, including `pywrangler`, which invokes Wrangler
-to run the Worker locally.
+In another terminal, set up and start the frontend:
 
-The Worker is served at `http://localhost:8787` by default. Verify it with:
+```bash
+cd apps/web
+cp .env.example .env.local
+npm install
+npm run dev
+```
+
+Set `VITE_API_URL=http://localhost:8787` in `apps/web/.env.local`. Local backend
+values belong in `apps/api/.env`; neither file should be committed.
+
+Open `http://localhost:5173` and use **Test API**, or check the API directly:
 
 ```bash
 curl http://localhost:8787/health
 ```
 
-Local values in `apps/api/.env` are loaded by Wrangler. For a deployed Worker,
-configure `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `FRONTEND_ORIGIN` as
-Cloudflare Worker secrets or environment variables. Never add a Supabase
-service-role or secret key to frontend environment variables.
-
-Deploy the backend after authenticating Wrangler with:
+Before pushing frontend changes, verify the production build:
 
 ```bash
-cd apps/api
-uv run pywrangler deploy
+cd apps/web
+npm run build
 ```
 
-## Cloudflare Pages
+## Deployment
 
-Configure the frontend project with:
+Cloudflare deploys automatically when changes are merged or pushed to `main`.
+Work on a branch, test locally, push the branch, and merge it into `main` when it
+is ready. The configured build watch paths deploy only the affected application:
 
 ```text
-Root directory:         apps/web
-Build command:          npm run build
-Build output directory: dist
+mahjong-web: apps/web/*
+mahjong-api: apps/api/*
 ```
 
-Add `VITE_API_URL`, `VITE_SUPABASE_URL`, and
-`VITE_SUPABASE_PUBLISHABLE_KEY` in the Cloudflare Pages environment settings.
+After both Cloudflare builds finish, open the production frontend and use
+**Test API** to smoke-test the deployment.
+
+## Environment variables
+
+For local development, change frontend values in `apps/web/.env.local` and
+backend values in `apps/api/.env`. These files are ignored by Git. When adding a
+new variable, add its name with an empty value to the corresponding
+`.env.example` file.
+
+For the deployed frontend, add or change values under `mahjong-web` > **Settings**
+> **Environment variables** in Cloudflare Pages, then trigger a new deployment.
+All `VITE_` variables are included in the browser build and must not contain
+secrets.
+
+For the deployed backend, add or change values under `mahjong-api` > **Settings**
+> **Variables and Secrets**. Store credentials and API keys as secrets. If a new
+secret is required by the application, also declare its name in `secrets.required`
+in `apps/api/wrangler.jsonc` and add it to `apps/api/.env.example`.
+
+Never commit credentials or expose a Supabase service-role key to the frontend.
 
 ## Supabase
 
