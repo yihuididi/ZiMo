@@ -49,9 +49,14 @@ database queries are implemented yet.
 ```bash
 cd apps/api
 cp .env.example .env
+npm install
 uv sync
 uv run pywrangler dev
 ```
+
+`npm install` installs the project-local Cloudflare Wrangler CLI. `uv sync`
+installs the Python dependencies, including `pywrangler`, which invokes Wrangler
+to run the Worker locally.
 
 The Worker is served at `http://localhost:8787` by default. Verify it with:
 
