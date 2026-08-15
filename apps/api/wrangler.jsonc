@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mahjong-api",
+  "main": "app/main.py",
+  "compatibility_date": "2026-08-15",
+  "compatibility_flags": [
+    "python_workers",
+    "python_dedicated_snapshot"
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "GAME_ROOM",
+        "class_name": "GameRoom"
+      }
+    ]
+  },
+  "exports": {
+    "GameRoom": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+  "observability": {
+    "enabled": true
+  }
+}

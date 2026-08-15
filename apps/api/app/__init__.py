@@ -1,0 +1,1 @@
+"""Mahjong API package."""

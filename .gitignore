@@ -1,0 +1,31 @@
+# JavaScript
+node_modules/
+dist/
+
+# Environment and local Cloudflare secrets
+.env
+.env.local
+.env.*.local
+.dev.vars*
+
+# Python
+.venv/
+.venv-workers/
+__pycache__/
+*.pyc
+python_modules/
+pylock.toml
+
+# Cloudflare
+.wrangler/
+
+# Test and tool caches
+.pytest_cache/
+.ruff_cache/
+
+# Supabase CLI state
+supabase/.branches/
+supabase/.temp/
+
+# Editors and operating systems
+.DS_Store

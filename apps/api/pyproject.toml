@@ -1,0 +1,16 @@
+[project]
+name = "mahjong-api"
+version = "0.0.0"
+description = "FastAPI infrastructure for the Mahjong Cloudflare Worker"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi",
+    "pydantic",
+    "supabase",
+]
+
+[dependency-groups]
+dev = [
+    "workers-py",
+    "workers-runtime-sdk",
+]
