@@ -1,9 +1,10 @@
-# Mahjong
+# ZiMo Mahjong
 
-Milestone 1 of a server-authoritative, real-time multiplayer Mahjong application.
-This milestone establishes the pure domain model and durable persistence boundary,
-but is intentionally non-playable: there are no public room APIs, WebSockets, lobby,
-wall generation, dealing, turn handling, claim resolution, or scoring.
+Milestone 2 of a server-authoritative, real-time multiplayer Mahjong application.
+It provides private four-seat rooms, bearer-authenticated lobby sessions, bots,
+readiness and host controls, revisioned commands, public room events, and
+hibernating WebSocket updates. Matches stop at a frozen `PENDING_SETUP` shell;
+wall generation, dealing, turns, claims, and scoring begin in later milestones.
 
 ## Architecture
 
@@ -15,23 +16,25 @@ FastAPI backend (Cloudflare Python Worker)
        │
        ├────► Supabase client (retained, non-authoritative)
        │
-       └────► GAME_ROOM Durable Object
+       └────► GAME_ROOM Durable Object ◄──── hibernating WebSockets
                     │
-                    ├──► platform-neutral room orchestrator
+                    ├──► pure lobby transitions and room orchestrator
                     ├──► SQLite snapshot repository
                     └──► pure CPython game package
 ```
 
 The `room_state` snapshot in Durable Object SQLite is the sole reconstruction
-source. Audit events, player credentials, processed commands, and socket tickets
-are operational projections and are never replayed to rebuild game state. The
-game package imports no Workers, HTTP, WebSocket, JavaScript, or SQLite modules.
+source. Audit events, hashed player/invite credentials, processed commands, and
+single-use socket tickets are operational projections and are never replayed to
+rebuild game state. Raw capabilities are returned only to their authorized
+caller. The game and lobby domain code imports no Workers, HTTP, WebSocket,
+JavaScript, or SQLite modules.
 
 ## Repository layout
 
 ```text
-apps/web/    React, Vite, and TypeScript status page
-apps/api/    FastAPI Worker, pure domain, room orchestrator, and SQLite repository
+apps/web/    React, Vite, and TypeScript room/lobby client
+apps/api/    FastAPI Worker, lobby domain, room orchestrator, and SQLite repository
 supabase/    Supabase CLI project configuration
 ```
 
@@ -65,7 +68,8 @@ npm run dev
 Set `VITE_API_URL=http://localhost:8787` in `apps/web/.env.local`. Local backend
 values belong in `apps/api/.env`; neither file should be committed.
 
-Open `http://localhost:5173` and use **Test API**, or check the API directly:
+Open `http://localhost:5173` to create a private room or open an invitation. The
+service health endpoint remains available directly:
 
 ```bash
 curl http://localhost:8787/health
@@ -77,6 +81,20 @@ Before pushing frontend changes, verify the production build:
 cd apps/web
 npm run build
 ```
+
+Invite links use `/rooms/{roomId}#invite={token}`. The client removes the fragment
+before paint and keeps room-scoped credentials in `localStorage` so the same
+browser can rejoin after a restart. Explicit leave, removal, or revocation clears
+the saved capability; clearing site data makes the session unrecoverable.
+
+In a pre-match lobby, a player is marked `Disconnected` when their final room
+socket closes and any Ready state is cleared immediately. If the disconnected
+player was host, permission transfers immediately to the earliest-joined human
+who is still connected; when nobody else is connected, the transfer waits until
+a member reconnects. The lobby shows a five-minute countdown, and reconnecting
+from the same saved browser session cancels the removal. If the deadline expires,
+the server revokes that player and opens their seat. Started and finished rooms
+retain roles, readiness, and disconnected seats without a removal deadline.
 
 ## Tests
 
@@ -106,11 +124,18 @@ cd apps/api
 npm run test:worker
 ```
 
-The integration test boots the production Worker configuration for its health
-surface and uses an isolated test-only Durable Object subclass to inspect SQLite,
-clear auxiliary rows, and invoke the production internal RPC methods inside
-`workerd`. None of those RPC methods are routed through FastAPI. To verify the
-deployment bundle:
+Run the browser-client unit and component tests:
+
+```bash
+cd apps/web
+npm test
+```
+
+The Worker integration suite exercises the public FastAPI routes, native Durable
+Object IDs, CORS and cache policy, revisions, one-use tickets, WebSocket
+broadcasts, and forced Durable Object eviction with hibernating sockets in real
+`workerd`. Its narrow test-only subclass is used only for fixed SQLite
+inspection. To verify the deployment bundle:
 
 ```bash
 cd apps/api
@@ -128,8 +153,8 @@ mahjong-web: apps/web/*
 mahjong-api: apps/api/*
 ```
 
-After both Cloudflare builds finish, open the production frontend and use
-**Test API** to smoke-test the deployment.
+After both Cloudflare builds finish, create a room, join it from a second browser
+session, and verify a lobby update arrives without refreshing the page.
 
 ## Environment variables
 
@@ -154,7 +179,7 @@ Never commit credentials or expose a Supabase service-role key to the frontend.
 
 Per the current project override, the existing Supabase initialization,
 configuration, dependencies, secrets declarations, and CLI project are retained.
-Supabase remains non-authoritative and unused by the Milestone 1 domain and
+Supabase remains non-authoritative and unused by the Milestone 2 domain and
 persistence foundation. `supabase/config.toml` establishes only the local CLI
 project boundary; no Supabase tables, migrations, users, authentication flows, or
 database queries are introduced by this milestone.

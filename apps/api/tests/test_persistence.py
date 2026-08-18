@@ -47,15 +47,18 @@ from app.persistence import (
     CorruptRoomStateError,
     PlayerProjectionError,
     PlayerRecord,
+    PlayerPresenceRecord,
     ProcessedCommandConflictError,
     ProcessedCommandRecord,
     ProjectedAuditEvent,
     RevisionConflictError,
     RoomInitializedAuditPayload,
+    RoomCredentialRecord,
     RoomRepository,
     RoomStateCommittedAuditPayload,
     SQLiteSqlExecutor,
     SocketTicketRecord,
+    SocketTicketUnavailableError,
     UnsupportedSchemaVersionError,
 )
 from app.room import RoomOrchestrator
@@ -64,8 +67,11 @@ from app.room import RoomOrchestrator
 EXPECTED_TABLES = {
     "_sql_schema_migrations",
     "events",
+    "player_presence",
     "players",
     "processed_commands",
+    "room_credentials",
+    "room_presence",
     "room_state",
     "socket_tickets",
 }
@@ -339,14 +345,31 @@ def test_schema_has_exact_tables_and_migration_is_idempotent(
     assert tables == EXPECTED_TABLES
     assert database.execute(
         "SELECT id, name, applied_at_ms FROM _sql_schema_migrations"
-    ).fetchall() == [(1, "milestone_1_foundation", 900)]
+    ).fetchall() == [
+        (1, "milestone_1_foundation", 900),
+        (2, "milestone_2_room_security", 900),
+        (3, "milestone_2_player_presence", 900),
+    ]
+
+
+def test_schema_ignores_cloudflare_runtime_internal_tables(
+    database: sqlite3.Connection,
+) -> None:
+    database.execute("CREATE TABLE _cf_METADATA (key TEXT PRIMARY KEY)")
+    database.execute("CREATE TABLE __cf_LEGACY_METADATA (key TEXT PRIMARY KEY)")
+
+    repository = RoomRepository.from_sqlite(database)
+    repository.initialize_schema(applied_at_ms=900)
+    repository.initialize_schema(applied_at_ms=901)
+
+    assert repository.presence_version() == 0
 
 
 @pytest.mark.parametrize(
     ("tamper_sql", "message"),
     (
         (
-            "UPDATE _sql_schema_migrations SET id = 2",
+            "UPDATE _sql_schema_migrations SET id = 4 WHERE id = 3",
             "migration history",
         ),
         (
@@ -399,6 +422,221 @@ def test_durable_storage_adapter_uses_synchronous_sql_contract(
     assert repository.load_room() == room_state()
 
 
+def test_presence_is_revision_neutral_generation_bound_and_reconnect_clears_it(
+    repository: RoomRepository,
+) -> None:
+    state = player_room_state()
+    repository.create_room(state, players=(player_record(),))
+    assert repository.presence_version() == 0
+    disconnected = PlayerPresenceRecord(
+        player_id="player-1",
+        auth_generation=0,
+        disconnected_at_ms=1_100,
+        disconnect_expires_at_ms=301_100,
+    )
+
+    assert repository.set_player_disconnected(disconnected) is True
+    assert repository.presence_version() == 1
+    assert repository.load_room() == state
+    assert repository.list_player_presence() == (disconnected,)
+    assert repository.next_presence_alarm_ms() == 301_100
+
+    # A duplicate close cannot silently extend the grace period.
+    assert repository.set_player_disconnected(
+        replace(
+            disconnected,
+            disconnected_at_ms=2_000,
+            disconnect_expires_at_ms=302_000,
+        )
+    ) is False
+    assert repository.presence_version() == 1
+    assert repository.list_player_presence() == (disconnected,)
+
+    assert repository.set_player_connected("player-1", 1) is False
+    assert repository.presence_version() == 1
+    assert repository.set_player_connected("player-1", 0) is True
+    assert repository.presence_version() == 2
+    assert repository.list_player_presence() == ()
+    assert repository.next_presence_alarm_ms() is None
+
+
+def test_presence_mutations_share_room_commit_and_roll_back_atomically(
+    repository: RoomRepository,
+) -> None:
+    initial = player_room_state()
+    repository.create_room(
+        initial,
+        players=(player_record(),),
+        processed_commands=(processed_command(),),
+    )
+    presence = PlayerPresenceRecord(
+        player_id="player-1",
+        auth_generation=0,
+        disconnected_at_ms=1_100,
+        disconnect_expires_at_ms=301_100,
+    )
+    data = initial.model_dump()
+    data.update(revision=1, updated_at_ms=1_100)
+    revised = RoomState.model_validate(data)
+    duplicate = ProcessedCommandRecord(
+        player_id="player-1",
+        command_id="command-1",
+        request_fingerprint="sha256:conflict",
+        revision=1,
+        result_json='{"ok":false}',
+        processed_at_ms=1_100,
+    )
+
+    with pytest.raises(ProcessedCommandConflictError):
+        repository.commit(
+            revised,
+            expected_revision=0,
+            upsert_player_presence=presence,
+            processed_commands=(duplicate,),
+        )
+    assert repository.load_room() == initial
+    assert repository.list_player_presence() == ()
+    assert repository.presence_version() == 0
+
+    repository.commit(
+        revised,
+        expected_revision=0,
+        upsert_player_presence=presence,
+    )
+    assert repository.load_room() == revised
+    assert repository.list_player_presence() == (presence,)
+    assert repository.presence_version() == 1
+
+    next_data = revised.model_dump()
+    next_data.update(revision=2, updated_at_ms=1_200)
+    reconnected = RoomState.model_validate(next_data)
+    repository.commit(
+        reconnected,
+        expected_revision=1,
+        clear_player_presence=(("player-1", 0),),
+    )
+    assert repository.load_room() == reconnected
+    assert repository.list_player_presence() == ()
+    assert repository.presence_version() == 2
+    assert repository.set_players_connected((("player-1", 0),)) is False
+    assert repository.presence_version() == 2
+
+
+def test_v2_to_v3_migration_seeds_active_players_with_a_grace_period(
+    database: sqlite3.Connection,
+) -> None:
+    repository = RoomRepository.from_sqlite(database)
+    repository.initialize_schema(applied_at_ms=900)
+    repository.create_room(
+        player_room_state(),
+        players=(player_record(),),
+    )
+    database.execute("DROP TABLE player_presence")
+    database.execute("DROP TABLE room_presence")
+    database.execute("DELETE FROM _sql_schema_migrations WHERE id = 3")
+
+    repository.initialize_schema(applied_at_ms=5_000)
+
+    assert repository.list_player_presence() == (
+        PlayerPresenceRecord(
+            player_id="player-1",
+            auth_generation=0,
+            disconnected_at_ms=5_000,
+            disconnect_expires_at_ms=305_000,
+        ),
+    )
+    assert repository.presence_version() == 1
+    assert repository.next_presence_alarm_ms() == 305_000
+
+
+def test_v2_to_v3_migration_freezes_presence_for_finished_rooms(
+    database: sqlite3.Connection,
+) -> None:
+    repository = RoomRepository.from_sqlite(database)
+    repository.initialize_schema(applied_at_ms=900)
+    data = player_room_state().model_dump()
+    data["status"] = RoomStatus.FINISHED
+    finished = RoomState.model_validate(data)
+    repository.create_room(finished, players=(player_record(),))
+    database.execute("DROP TABLE player_presence")
+    database.execute("DROP TABLE room_presence")
+    database.execute("DELETE FROM _sql_schema_migrations WHERE id = 3")
+
+    repository.initialize_schema(applied_at_ms=5_000)
+
+    assert repository.list_player_presence() == (
+        PlayerPresenceRecord(
+            player_id="player-1",
+            auth_generation=0,
+            disconnected_at_ms=5_000,
+            disconnect_expires_at_ms=None,
+        ),
+    )
+    assert repository.next_presence_alarm_ms() is None
+
+
+def test_room_commit_cleans_revoked_presence_and_freezes_match_deadlines(
+    repository: RoomRepository,
+) -> None:
+    initial = player_room_state()
+    repository.create_room(initial, players=(player_record(),))
+    presence = PlayerPresenceRecord(
+        player_id="player-1",
+        auth_generation=0,
+        disconnected_at_ms=1_100,
+        disconnect_expires_at_ms=301_100,
+    )
+    repository.set_player_disconnected(presence)
+    finished_data = initial.model_dump()
+    finished_data.update(
+        revision=1,
+        status=RoomStatus.FINISHED,
+        seats=standard_seats(),
+        players=(),
+        updated_at_ms=1_200,
+    )
+    finished = RoomState.model_validate(finished_data)
+    repository.compare_and_swap(0, finished, players=())
+    assert repository.list_player_presence() == ()
+    assert repository.presence_version() == 2
+
+
+def test_in_match_commit_nulls_disconnect_deadlines(
+    database: sqlite3.Connection,
+) -> None:
+    repository = RoomRepository.from_sqlite(database)
+    repository.initialize_schema(applied_at_ms=900)
+    initial = rich_room_state()
+    repository.create_room(initial, players=(player_record(),))
+    repository.set_player_disconnected(
+        PlayerPresenceRecord(
+            player_id="player-1",
+            auth_generation=0,
+            disconnected_at_ms=1_100,
+            disconnect_expires_at_ms=301_100,
+        )
+    )
+    data = initial.model_dump()
+    data.update(revision=1, updated_at_ms=1_200)
+    revised = RoomState.model_validate(data)
+    repository.compare_and_swap(
+        0,
+        revised,
+        players=(player_record(updated_at_ms=1_200),),
+    )
+
+    assert repository.list_player_presence() == (
+        PlayerPresenceRecord(
+            player_id="player-1",
+            auth_generation=0,
+            disconnected_at_ms=1_100,
+            disconnect_expires_at_ms=None,
+        ),
+    )
+    assert repository.next_presence_alarm_ms() is None
+    assert repository.presence_version() == 2
+
+
 def test_create_and_load_round_trip_exact_canonical_state(
     repository: RoomRepository, database: sqlite3.Connection
 ) -> None:
@@ -419,7 +657,7 @@ def test_create_and_load_round_trip_exact_canonical_state(
     ).fetchone()
     assert row is not None
     assert row[0] == initial.canonical_json()
-    assert row[1:5] == ("singapore", "0.1.0", 1, 0)
+    assert row[1:5] == ("singapore", "0.1.0", 2, 0)
     assert json.loads(row[5]) == initial.config.canonical_data()
     assert row[6:] == (1_000, 1_000)
     assert loaded.match is not None
@@ -707,7 +945,11 @@ def test_roster_change_revokes_and_retains_historical_player_security_rows(
         0,
         revised,
         players=(
-            player_record(player_id="player-2", display_name="New East"),
+            player_record(
+                player_id="player-2",
+                display_name="New East",
+                token_hash="c" * 64,
+            ),
         ),
         events=(committed_event(revised, 1_001),),
     )
@@ -886,7 +1128,7 @@ def test_cas_freezes_metadata_and_requires_monotonic_timestamps(
         "room_id": RoomId("other-room"),
         "ruleset_id": "other-rules",
         "ruleset_version": "99.0.0",
-        "state_schema_version": 2,
+        "state_schema_version": 3,
         "created_at_ms": 999,
     }
     for field, value in mutations.items():
@@ -970,3 +1212,76 @@ def test_load_rejects_indexed_metadata_that_disagrees_with_snapshot(
 
     with pytest.raises(CorruptRoomStateError, match="ruleset_version"):
         repository.load_room()
+
+
+def test_room_invite_credentials_rotate_atomically(
+    repository: RoomRepository,
+) -> None:
+    initial = player_room_state()
+    first = RoomCredentialRecord("e" * 64, 0, 1_000, 1_000)
+    repository.create_room(
+        initial,
+        players=(player_record(),),
+        room_credentials=first,
+    )
+    assert repository.load_room_credentials() == first
+
+    revised = player_room_state(revision=1, updated_at_ms=1_001)
+    second = RoomCredentialRecord("f" * 64, 1, 1_000, 1_001)
+    repository.commit(
+        revised,
+        expected_revision=0,
+        room_credentials=second,
+    )
+    assert repository.load_room_credentials() == second
+
+    bad = RoomCredentialRecord("1" * 64, 3, 1_000, 1_002)
+    next_state = player_room_state(revision=2, updated_at_ms=1_002)
+    with pytest.raises(PlayerProjectionError, match="generation"):
+        repository.commit(
+            next_state,
+            expected_revision=1,
+            room_credentials=bad,
+        )
+    assert repository.load_room().revision == 1
+    assert repository.load_room_credentials() == second
+
+
+def test_auth_and_socket_ticket_transactions_are_revision_neutral(
+    repository: RoomRepository,
+) -> None:
+    initial = player_room_state()
+    player = player_record()
+    repository.create_room(initial, players=(player,))
+
+    assert repository.authenticate_player(TOKEN_HASH) == player
+    assert repository.authenticate_player("0" * 64) is None
+
+    ticket = SocketTicketRecord(
+        ticket_hash=TICKET_HASH,
+        player_id=player.player_id,
+        auth_generation=player.auth_generation,
+        created_at_ms=1_000,
+        expires_at_ms=1_100,
+    )
+    repository.create_socket_ticket(ticket)
+    consumed = repository.consume_socket_ticket(
+        TICKET_HASH, consumed_at_ms=1_099
+    )
+    assert consumed.consumed_at_ms == 1_099
+    assert repository.load_room().revision == 0
+    with pytest.raises(SocketTicketUnavailableError):
+        repository.consume_socket_ticket(TICKET_HASH, consumed_at_ms=1_099)
+
+    expired = SocketTicketRecord(
+        ticket_hash="9" * 64,
+        player_id=player.player_id,
+        auth_generation=player.auth_generation,
+        created_at_ms=1_200,
+        expires_at_ms=1_300,
+    )
+    repository.create_socket_ticket(expired)
+    with pytest.raises(SocketTicketUnavailableError):
+        repository.consume_socket_ticket("9" * 64, consumed_at_ms=1_300)
+    assert repository.cleanup_socket_tickets(now_ms=1_300) == 1
+    assert repository.load_room().revision == 0

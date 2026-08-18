@@ -23,13 +23,21 @@ else:  # Python Workers load ``app/main.py`` modules from the app directory.
 
 _T = TypeVar("_T")
 _ROOM_STATE_SINGLETON_ID = 1
-_LATEST_SCHEMA_VERSION = 1
-_MIGRATION_NAMES = {1: "milestone_1_foundation"}
+_DISCONNECT_GRACE_MS = 300_000
+_LATEST_SCHEMA_VERSION = 3
+_MIGRATION_NAMES = {
+    1: "milestone_1_foundation",
+    2: "milestone_2_room_security",
+    3: "milestone_2_player_presence",
+}
 _REQUIRED_APPLICATION_TABLES = {
     "_sql_schema_migrations",
     "events",
+    "player_presence",
     "players",
     "processed_commands",
+    "room_credentials",
+    "room_presence",
     "room_state",
     "socket_tickets",
 }
@@ -73,6 +81,30 @@ class ProcessedCommandConflictError(PersistenceError):
 
 class PlayerProjectionError(PersistenceError):
     """Raised when authentication projections disagree with canonical state."""
+
+
+class SocketTicketUnavailableError(PersistenceError):
+    """Raised when a socket ticket is unknown, expired, stale, or consumed."""
+
+
+@dataclass(frozen=True, slots=True)
+class PlayerPresenceRecord:
+    """Durable disconnected state for one active player authentication generation.
+
+    Connected players deliberately have no row.  A nullable expiry represents a
+    disconnected player whose seat is frozen after match start.
+    """
+
+    player_id: str
+    auth_generation: int
+    disconnected_at_ms: int
+    disconnect_expires_at_ms: int | None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "player_id", _identity_text(self.player_id, "player_id")
+        )
+        _validate_player_presence(self)
 
 
 class SynchronousSqlExecutor(Protocol):
@@ -222,6 +254,19 @@ class PlayerRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class RoomCredentialRecord:
+    """Hashed, rotatable room invite capability; raw values never persist."""
+
+    invite_token_hash: str
+    invite_generation: int
+    created_at_ms: int
+    updated_at_ms: int
+
+    def __post_init__(self) -> None:
+        _validate_room_credential(self)
+
+
+@dataclass(frozen=True, slots=True)
 class RoomInitializedAuditPayload:
     """Allow-listed public fact that a canonical room was initialized."""
 
@@ -253,12 +298,61 @@ class RoomStateCommittedAuditPayload:
             raise ValueError("audit revision must equal previous_revision + 1")
 
 
-SafeAuditPayload: TypeAlias = (
-    RoomInitializedAuditPayload | RoomStateCommittedAuditPayload
+_LOBBY_AUDIT_EVENT_TYPES = frozenset(
+    {
+        "roomCreated",
+        "playerJoined",
+        "playerReadinessChanged",
+        "botAdded",
+        "botsFilled",
+        "botRemoved",
+        "playerRemoved",
+        "playerLeft",
+        "hostTransferred",
+        "inviteRotated",
+        "matchStarted",
+        "configUpdated",
+    }
 )
+
+
+@dataclass(frozen=True, slots=True)
+class LobbyAuditPayload:
+    """Allow-listed public lobby fact with canonical, secret-free details."""
+
+    event_type: str
+    room_id: str
+    revision: int
+    details_json: str = "{}"
+
+    def __post_init__(self) -> None:
+        if self.event_type not in _LOBBY_AUDIT_EVENT_TYPES:
+            raise ValueError("lobby audit event type is not allow-listed")
+        object.__setattr__(self, "room_id", _identity_text(self.room_id, "room_id"))
+        _require_non_negative_int(self.revision, "revision")
+        canonical = _canonicalize_json_text(self.details_json, "details_json")
+        details = json.loads(canonical)
+        if type(details) is not dict:
+            raise ValueError("lobby audit details must be a JSON object")
+        _validate_public_event_details(details)
+        object.__setattr__(self, "details_json", canonical)
+
+    @property
+    def details(self) -> dict[str, object]:
+        return cast(dict[str, object], json.loads(self.details_json))
+
+
+SafeAuditPayload: TypeAlias = (
+    RoomInitializedAuditPayload
+    | RoomStateCommittedAuditPayload
+    | LobbyAuditPayload
+)
+
+
 _SAFE_AUDIT_PAYLOAD_TYPES = (
     RoomInitializedAuditPayload,
     RoomStateCommittedAuditPayload,
+    LobbyAuditPayload,
 )
 
 
@@ -425,6 +519,51 @@ _MIGRATION_ONE_STATEMENTS = (
 )
 
 
+_MIGRATION_TWO_STATEMENTS = (
+    """
+    CREATE TABLE room_credentials (
+        singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+        invite_token_hash TEXT NOT NULL CHECK (
+            length(invite_token_hash) = 64
+            AND invite_token_hash NOT GLOB '*[^0-9a-f]*'
+        ),
+        invite_generation INTEGER NOT NULL CHECK (invite_generation >= 0),
+        created_at_ms INTEGER NOT NULL CHECK (created_at_ms >= 0),
+        updated_at_ms INTEGER NOT NULL CHECK (updated_at_ms >= created_at_ms)
+    )
+    """,
+    "CREATE UNIQUE INDEX players_token_hash_unique ON players(token_hash)",
+    "CREATE INDEX socket_tickets_player_index ON socket_tickets(player_id)",
+    "CREATE INDEX socket_tickets_expiry_index ON socket_tickets(expires_at_ms, consumed_at_ms)",
+)
+
+
+_MIGRATION_THREE_STATEMENTS = (
+    """
+    CREATE TABLE room_presence (
+        singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+        presence_version INTEGER NOT NULL CHECK (presence_version >= 0)
+    )
+    """,
+    "INSERT INTO room_presence (singleton_id, presence_version) VALUES (1, 0)",
+    """
+    CREATE TABLE player_presence (
+        player_id TEXT PRIMARY KEY,
+        auth_generation INTEGER NOT NULL CHECK (auth_generation >= 0),
+        disconnected_at_ms INTEGER NOT NULL CHECK (disconnected_at_ms >= 0),
+        disconnect_expires_at_ms INTEGER CHECK (
+            disconnect_expires_at_ms IS NULL
+            OR disconnect_expires_at_ms >= disconnected_at_ms
+        )
+    )
+    """,
+    """
+    CREATE INDEX player_presence_expiry_index
+    ON player_presence(disconnect_expires_at_ms)
+    """,
+)
+
+
 class RoomRepository:
     """Synchronous repository for one room per SQL database."""
 
@@ -486,7 +625,7 @@ class RoomRepository:
                     "application tables exist without a recorded migration"
                 )
 
-            if len(history) < _LATEST_SCHEMA_VERSION:
+            if len(history) < 1:
                 for statement in _MIGRATION_ONE_STATEMENTS:
                     self._executor.exec(statement)
                 self._executor.exec(
@@ -495,7 +634,67 @@ class RoomRepository:
                     VALUES (?, ?, ?)
                     """,
                     1,
-                    "milestone_1_foundation",
+                    _MIGRATION_NAMES[1],
+                    timestamp,
+                )
+                history.append((1, _MIGRATION_NAMES[1]))
+
+            if len(history) < 2:
+                for statement in _MIGRATION_TWO_STATEMENTS:
+                    self._executor.exec(statement)
+                self._upgrade_room_snapshots_to_v2()
+                self._executor.exec(
+                    """
+                    INSERT INTO _sql_schema_migrations (id, name, applied_at_ms)
+                    VALUES (?, ?, ?)
+                    """,
+                    2,
+                    _MIGRATION_NAMES[2],
+                    timestamp,
+                )
+                history.append((2, _MIGRATION_NAMES[2]))
+
+            if len(history) < 3:
+                for statement in _MIGRATION_THREE_STATEMENTS:
+                    self._executor.exec(statement)
+                self._executor.exec(
+                    """
+                    INSERT INTO player_presence (
+                        player_id, auth_generation, disconnected_at_ms,
+                        disconnect_expires_at_ms
+                    )
+                    SELECT player_id, auth_generation, ?,
+                           CASE
+                               WHEN EXISTS (
+                                   SELECT 1
+                                   FROM room_state
+                                   WHERE json_extract(snapshot_json, '$.status')
+                                       IN ('IN_MATCH', 'FINISHED')
+                               ) THEN NULL
+                               ELSE ?
+                           END
+                    FROM players
+                    WHERE left_at_ms IS NULL
+                    """,
+                    timestamp,
+                    timestamp + _DISCONNECT_GRACE_MS,
+                )
+                self._executor.exec(
+                    """
+                    UPDATE room_presence
+                    SET presence_version = 1
+                    WHERE singleton_id = ?
+                      AND EXISTS (SELECT 1 FROM player_presence)
+                    """,
+                    _ROOM_STATE_SINGLETON_ID,
+                )
+                self._executor.exec(
+                    """
+                    INSERT INTO _sql_schema_migrations (id, name, applied_at_ms)
+                    VALUES (?, ?, ?)
+                    """,
+                    3,
+                    _MIGRATION_NAMES[3],
                     timestamp,
                 )
 
@@ -510,6 +709,55 @@ class RoomRepository:
 
         self._executor.transaction(migrate)
 
+    def _upgrade_room_snapshots_to_v2(self) -> None:
+        """Rewrite v1 room JSON canonically while preserving revision/history."""
+
+        rows = _rows(
+            self._executor.exec(
+                """
+                SELECT singleton_id, snapshot_json
+                FROM room_state
+                WHERE state_schema_version = 1
+                """
+            )
+        )
+        for row in rows:
+            try:
+                value = json.loads(str(_row_value(row, "snapshot_json")))
+                marker = value.get("stateSchemaVersion") if type(value) is dict else None
+                if type(value) is not dict or type(marker) is not int or marker != 1:
+                    raise ValueError("schema metadata is inconsistent")
+                match = value.get("match")
+                if (
+                    isinstance(match, dict)
+                    and match.get("status") == "PENDING_SETUP"
+                ):
+                    raise ValueError("schema-v1 snapshot contains a v2-only match")
+                value["stateSchemaVersion"] = 2
+                state = RoomState.model_validate_json(
+                    json.dumps(
+                        value,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                        sort_keys=True,
+                    ),
+                    strict=True,
+                )
+                snapshot_json = state.canonical_json()
+            except Exception as exc:
+                raise UnsupportedSchemaVersionError(
+                    "cannot upgrade a stored schema-v1 room snapshot"
+                ) from exc
+            self._executor.exec(
+                """
+                UPDATE room_state
+                SET snapshot_json = ?, state_schema_version = 2
+                WHERE singleton_id = ? AND state_schema_version = 1
+                """,
+                snapshot_json,
+                int(_row_value(row, "singleton_id")),
+            )
+
     def _application_table_names(self) -> set[str]:
         rows = _rows(
             self._executor.exec(
@@ -520,7 +768,7 @@ class RoomRepository:
             name
             for row in rows
             if not (name := str(_row_value(row, "name"))).startswith("sqlite_")
-            and not name.startswith("__cf_")
+            and not name.startswith(("_cf_", "__cf_"))
         }
 
     def create_room(
@@ -531,6 +779,8 @@ class RoomRepository:
         events: Sequence[ProjectedAuditEvent] = (),
         processed_commands: Sequence[ProcessedCommandRecord] = (),
         socket_tickets: Sequence[SocketTicketRecord] = (),
+        player_presence: Sequence[PlayerPresenceRecord] = (),
+        room_credentials: RoomCredentialRecord | None = None,
     ) -> RoomState:
         """Create the canonical room and its supplied projections atomically."""
 
@@ -540,19 +790,33 @@ class RoomRepository:
         audit_events = tuple(events)
         command_records = tuple(processed_commands)
         ticket_records = tuple(socket_tickets)
+        presence_records = tuple(player_presence)
+        if room_credentials is not None:
+            _validate_room_credential(room_credentials)
         _validate_players_against_state(
             player_records, state, allow_historical=False
         )
         _validate_audit_events(audit_events, record)
         _validate_security_references(
-            command_records, ticket_records, player_records
+            command_records,
+            ticket_records,
+            player_records,
+            allowed_command_player_ids={
+                player.player_id
+                for player in player_records
+                if player.left_at_ms is None
+            },
         )
+        _validate_presence_references(presence_records, player_records)
 
         def create() -> None:
             if self._room_row() is not None:
                 raise RoomAlreadyExistsError("room state is already initialized")
             self._insert_room_record(record)
+            if room_credentials is not None:
+                self._insert_room_credential(room_credentials)
             self._replace_players(player_records)
+            self._insert_player_presence(presence_records)
             self._append_events(
                 audit_events,
                 revision=record.revision,
@@ -587,6 +851,10 @@ class RoomRepository:
         events: Sequence[ProjectedAuditEvent] = (),
         processed_commands: Sequence[ProcessedCommandRecord] = (),
         socket_tickets: Sequence[SocketTicketRecord] = (),
+        player_presence: Sequence[PlayerPresenceRecord] = (),
+        upsert_player_presence: PlayerPresenceRecord | None = None,
+        clear_player_presence: Sequence[tuple[str, int]] = (),
+        room_credentials: RoomCredentialRecord | None = None,
     ) -> RoomState:
         """Commit the next room revision and all projections in one transaction."""
 
@@ -597,6 +865,22 @@ class RoomRepository:
         audit_events = tuple(events)
         command_records = tuple(processed_commands)
         ticket_records = tuple(socket_tickets)
+        presence_records = tuple(player_presence)
+        presence_upsert = upsert_player_presence
+        if (
+            presence_upsert is not None
+            and type(presence_upsert) is not PlayerPresenceRecord
+        ):
+            raise TypeError("upsert_player_presence must be an exact PlayerPresenceRecord")
+        clear_presence = _normalize_player_identities(clear_player_presence)
+        if (
+            presence_upsert is not None
+            and (presence_upsert.player_id, presence_upsert.auth_generation)
+            in clear_presence
+        ):
+            raise ValueError("the same player presence cannot be upserted and cleared")
+        if room_credentials is not None:
+            _validate_room_credential(room_credentials)
         if record.revision != expected_revision + 1:
             raise ValueError(
                 "committed RoomState revision must equal expected_revision + 1"
@@ -660,7 +944,31 @@ class RoomRepository:
                 command_records,
                 ticket_records,
                 effective_players,
+                allowed_command_player_ids={
+                    player.player_id
+                    for player in existing_players
+                    if player.left_at_ms is None
+                },
             )
+            _validate_presence_references(presence_records, effective_players)
+            _validate_presence_references(
+                () if presence_upsert is None else (presence_upsert,),
+                effective_players,
+            )
+            _validate_connected_presence_references(
+                clear_presence,
+                effective_players,
+            )
+
+            if room_credentials is not None:
+                current_credentials = self.load_room_credentials()
+                if current_credentials is None:
+                    raise PlayerProjectionError(
+                        "room invite credentials have not been initialized"
+                    )
+                _validate_room_credential_transition(
+                    current_credentials, room_credentials
+                )
 
             cursor = self._executor.exec(
                 """
@@ -692,6 +1000,34 @@ class RoomRepository:
 
             if player_records is not None:
                 self._replace_players(effective_players)
+            self._insert_player_presence(presence_records)
+            self._apply_player_presence_mutation(
+                upsert=presence_upsert,
+                clear_identities=clear_presence,
+            )
+            if getattr(state.status, "value", state.status) in {
+                "IN_MATCH",
+                "FINISHED",
+            }:
+                pending = _rows(
+                    self._executor.exec(
+                        """
+                        SELECT player_id FROM player_presence
+                        WHERE disconnect_expires_at_ms IS NOT NULL
+                        """
+                    )
+                )
+                if pending:
+                    self._executor.exec(
+                        """
+                        UPDATE player_presence
+                        SET disconnect_expires_at_ms = NULL
+                        WHERE disconnect_expires_at_ms IS NOT NULL
+                        """
+                    )
+                    self._advance_presence_version()
+            if room_credentials is not None:
+                self._replace_room_credential(room_credentials)
             self._append_events(
                 audit_events,
                 revision=record.revision,
@@ -714,6 +1050,10 @@ class RoomRepository:
         events: Sequence[ProjectedAuditEvent] = (),
         processed_commands: Sequence[ProcessedCommandRecord] = (),
         socket_tickets: Sequence[SocketTicketRecord] = (),
+        player_presence: Sequence[PlayerPresenceRecord] = (),
+        upsert_player_presence: PlayerPresenceRecord | None = None,
+        clear_player_presence: Sequence[tuple[str, int]] = (),
+        room_credentials: RoomCredentialRecord | None = None,
     ) -> RoomState:
         """Keyword-oriented alias for :meth:`compare_and_swap`."""
 
@@ -724,7 +1064,265 @@ class RoomRepository:
             events=events,
             processed_commands=processed_commands,
             socket_tickets=socket_tickets,
+            player_presence=player_presence,
+            upsert_player_presence=upsert_player_presence,
+            clear_player_presence=clear_player_presence,
+            room_credentials=room_credentials,
         )
+
+    def load_room_credentials(self) -> RoomCredentialRecord | None:
+        rows = _rows(
+            self._executor.exec(
+                """
+                SELECT invite_token_hash, invite_generation,
+                       created_at_ms, updated_at_ms
+                FROM room_credentials
+                WHERE singleton_id = ?
+                """,
+                _ROOM_STATE_SINGLETON_ID,
+            )
+        )
+        if len(rows) > 1:
+            raise CorruptRoomStateError("multiple room credential rows found")
+        if not rows:
+            return None
+        row = rows[0]
+        try:
+            return RoomCredentialRecord(
+                invite_token_hash=str(_row_value(row, "invite_token_hash")),
+                invite_generation=int(_row_value(row, "invite_generation")),
+                created_at_ms=int(_row_value(row, "created_at_ms")),
+                updated_at_ms=int(_row_value(row, "updated_at_ms")),
+            )
+        except (TypeError, ValueError) as exc:
+            raise CorruptRoomStateError("stored room credentials are invalid") from exc
+
+    def get_player(
+        self, player_id: str, *, include_revoked: bool = False
+    ) -> PlayerRecord | None:
+        player_id = _identity_text(player_id, "player_id")
+        records = self._load_players()
+        return next(
+            (
+                player
+                for player in records
+                if player.player_id == player_id
+                and (include_revoked or player.left_at_ms is None)
+            ),
+            None,
+        )
+
+    def get_player_by_token_hash(self, token_hash: str) -> PlayerRecord | None:
+        _require_sha256_hex(token_hash, "token_hash")
+        rows = _rows(
+            self._executor.exec(
+                """
+                SELECT player_id, seat_id, display_name, role, controller_json,
+                       token_hash, auth_generation, joined_at_ms, updated_at_ms,
+                       left_at_ms
+                FROM players
+                WHERE token_hash = ? AND left_at_ms IS NULL
+                """,
+                token_hash,
+            )
+        )
+        if len(rows) > 1:
+            raise CorruptRoomStateError("player token hash is not unique")
+        return None if not rows else _player_record_from_row(rows[0])
+
+    def authenticate_player(self, token_hash: str) -> PlayerRecord | None:
+        """Atomically authenticate an active token against canonical membership."""
+
+        _require_sha256_hex(token_hash, "token_hash")
+
+        def authenticate() -> PlayerRecord | None:
+            player = self.get_player_by_token_hash(token_hash)
+            if player is None:
+                return None
+            state = self.load_room()
+            if state is None:
+                raise CorruptRoomStateError(
+                    "active player credentials exist without canonical room state"
+                )
+            _validate_players_against_state(
+                self._load_players(), state, allow_historical=True
+            )
+            return player
+
+        return self._executor.transaction(authenticate)
+
+    def list_player_records(
+        self, *, include_revoked: bool = True
+    ) -> tuple[PlayerRecord, ...]:
+        records = self._load_players()
+        if include_revoked:
+            return records
+        return tuple(player for player in records if player.left_at_ms is None)
+
+    def set_player_disconnected(self, presence: PlayerPresenceRecord) -> bool:
+        """Persist disconnected state for an active authentication generation.
+
+        The operation is revision-neutral and returns whether the public
+        presence projection changed.  Stale close notifications are ignored.
+        """
+
+        if type(presence) is not PlayerPresenceRecord:
+            raise TypeError("presence must be an exact PlayerPresenceRecord")
+
+        def update() -> bool:
+            player = self.get_player(presence.player_id)
+            if (
+                player is None
+                or player.auth_generation != presence.auth_generation
+            ):
+                return False
+            return self._apply_player_presence_mutation(
+                upsert=presence,
+                clear_identities=(),
+            )
+
+        return self._executor.transaction(update)
+
+    def set_player_connected(self, player_id: str, auth_generation: int) -> bool:
+        """Clear durable disconnected state for an active socket identity."""
+
+        return self.set_players_connected(((player_id, auth_generation),))
+
+    def set_players_connected(
+        self, identities: Sequence[tuple[str, int]]
+    ) -> bool:
+        """Atomically clear disconnected state for active socket identities."""
+
+        normalized = _normalize_player_identities(identities)
+        if not normalized:
+            return False
+
+        def update() -> bool:
+            active = {
+                (player.player_id, player.auth_generation)
+                for player in self.list_player_records(include_revoked=False)
+            }
+            confirmed = tuple(
+                identity for identity in normalized if identity in active
+            )
+            return self._apply_player_presence_mutation(
+                upsert=None,
+                clear_identities=confirmed,
+            )
+
+        return self._executor.transaction(update)
+
+    def list_player_presence(self) -> tuple[PlayerPresenceRecord, ...]:
+        """Return disconnected state for active players and generations only."""
+
+        rows = _rows(
+            self._executor.exec(
+                """
+                SELECT presence.player_id AS player_id,
+                       presence.auth_generation AS auth_generation,
+                       presence.disconnected_at_ms AS disconnected_at_ms,
+                       presence.disconnect_expires_at_ms AS disconnect_expires_at_ms
+                FROM player_presence AS presence
+                JOIN players AS player ON player.player_id = presence.player_id
+                WHERE player.left_at_ms IS NULL
+                  AND player.auth_generation = presence.auth_generation
+                ORDER BY presence.player_id
+                """
+            )
+        )
+        try:
+            return tuple(_player_presence_from_row(row) for row in rows)
+        except (TypeError, ValueError) as exc:
+            raise CorruptRoomStateError("stored player presence is invalid") from exc
+
+    def next_presence_alarm_ms(self) -> int | None:
+        rows = _rows(
+            self._executor.exec(
+                """
+                SELECT MIN(presence.disconnect_expires_at_ms) AS deadline
+                FROM player_presence AS presence
+                JOIN players AS player ON player.player_id = presence.player_id
+                WHERE player.left_at_ms IS NULL
+                  AND player.auth_generation = presence.auth_generation
+                  AND presence.disconnect_expires_at_ms IS NOT NULL
+                """
+            )
+        )
+        if len(rows) != 1:
+            raise CorruptRoomStateError("presence alarm query returned invalid rows")
+        deadline = _row_value(rows[0], "deadline")
+        return None if deadline is None else int(deadline)
+
+    def presence_version(self) -> int:
+        rows = _rows(
+            self._executor.exec(
+                """
+                SELECT presence_version
+                FROM room_presence
+                WHERE singleton_id = ?
+                """,
+                _ROOM_STATE_SINGLETON_ID,
+            )
+        )
+        if len(rows) != 1:
+            raise CorruptRoomStateError("room presence metadata is unavailable")
+        return _require_non_negative_int(
+            int(_row_value(rows[0], "presence_version")),
+            "presence_version",
+        )
+
+    def clear_presence_expiration_deadlines(self) -> bool:
+        """Freeze disconnected seats, retaining their disconnected projection."""
+
+        def update() -> bool:
+            rows = _rows(
+                self._executor.exec(
+                    """
+                    SELECT presence.player_id AS player_id
+                    FROM player_presence AS presence
+                    JOIN players AS player ON player.player_id = presence.player_id
+                    WHERE player.left_at_ms IS NULL
+                      AND player.auth_generation = presence.auth_generation
+                      AND presence.disconnect_expires_at_ms IS NOT NULL
+                    """
+                )
+            )
+            if not rows:
+                return False
+            self._executor.exec(
+                """
+                UPDATE player_presence
+                SET disconnect_expires_at_ms = NULL
+                WHERE player_id IN (
+                    SELECT presence.player_id
+                    FROM player_presence AS presence
+                    JOIN players AS player
+                      ON player.player_id = presence.player_id
+                    WHERE player.left_at_ms IS NULL
+                      AND player.auth_generation = presence.auth_generation
+                )
+                """
+            )
+            self._advance_presence_version()
+            return True
+
+        return self._executor.transaction(update)
+
+    def _advance_presence_version(self) -> int:
+        rows = _rows(
+            self._executor.exec(
+                """
+                UPDATE room_presence
+                SET presence_version = presence_version + 1
+                WHERE singleton_id = ?
+                RETURNING presence_version
+                """,
+                _ROOM_STATE_SINGLETON_ID,
+            )
+        )
+        if len(rows) != 1:
+            raise CorruptRoomStateError("room presence metadata is unavailable")
+        return int(_row_value(rows[0], "presence_version"))
 
     def get_processed_command(
         self,
@@ -850,6 +1448,89 @@ class RoomRepository:
             consumed_at_ms=None if consumed is None else int(consumed),
         )
 
+    def create_socket_ticket(self, ticket: SocketTicketRecord) -> SocketTicketRecord:
+        """Issue a ticket atomically without changing the canonical revision."""
+
+        if type(ticket) is not SocketTicketRecord:
+            raise TypeError("ticket must be an exact SocketTicketRecord")
+
+        def create() -> None:
+            self._delete_unavailable_socket_tickets(ticket.created_at_ms)
+            player = self.get_player(ticket.player_id)
+            if player is None or player.auth_generation != ticket.auth_generation:
+                raise PlayerProjectionError(
+                    "socket ticket must reference the active auth generation"
+                )
+            self._insert_socket_tickets((ticket,))
+
+        self._executor.transaction(create)
+        return ticket
+
+    def consume_socket_ticket(
+        self, ticket_hash: str, *, consumed_at_ms: int
+    ) -> SocketTicketRecord:
+        """Atomically consume an unexpired ticket for an active auth generation."""
+
+        _require_sha256_hex(ticket_hash, "ticket_hash")
+        _require_non_negative_int(consumed_at_ms, "consumed_at_ms")
+
+        def consume() -> SocketTicketRecord:
+            self._delete_unavailable_socket_tickets(consumed_at_ms)
+            rows = _rows(
+                self._executor.exec(
+                """
+                UPDATE socket_tickets
+                SET consumed_at_ms = ?
+                WHERE ticket_hash = ?
+                  AND consumed_at_ms IS NULL
+                  AND expires_at_ms > ?
+                  AND created_at_ms <= ?
+                  AND (player_id, auth_generation) IN (
+                      SELECT player_id, auth_generation FROM players
+                      WHERE left_at_ms IS NULL
+                  )
+                RETURNING ticket_hash, player_id, auth_generation,
+                          expires_at_ms, created_at_ms, consumed_at_ms
+                """,
+                consumed_at_ms,
+                ticket_hash,
+                consumed_at_ms,
+                consumed_at_ms,
+                )
+            )
+            if len(rows) != 1:
+                raise SocketTicketUnavailableError("socket ticket is unavailable")
+            row = rows[0]
+            consumed = _row_value(row, "consumed_at_ms")
+            return SocketTicketRecord(
+                ticket_hash=str(_row_value(row, "ticket_hash")),
+                player_id=str(_row_value(row, "player_id")),
+                auth_generation=int(_row_value(row, "auth_generation")),
+                expires_at_ms=int(_row_value(row, "expires_at_ms")),
+                created_at_ms=int(_row_value(row, "created_at_ms")),
+                consumed_at_ms=None if consumed is None else int(consumed),
+            )
+
+        return self._executor.transaction(consume)
+
+    def cleanup_socket_tickets(self, *, now_ms: int) -> int:
+        """Delete expired and consumed ticket rows without advancing revision."""
+
+        _require_non_negative_int(now_ms, "now_ms")
+        return self._executor.transaction(
+            lambda: self._delete_unavailable_socket_tickets(now_ms)
+        )
+
+    def _delete_unavailable_socket_tickets(self, now_ms: int) -> int:
+        cursor = self._executor.exec(
+            """
+            DELETE FROM socket_tickets
+            WHERE consumed_at_ms IS NOT NULL OR expires_at_ms <= ?
+            """,
+            now_ms,
+        )
+        return _rows_written(cursor) or 0
+
     def _room_row(self) -> Any | None:
         rows = _rows(
             self._executor.exec(
@@ -888,6 +1569,40 @@ class RoomRepository:
             record.updated_at_ms,
         )
 
+    def _insert_room_credential(self, record: RoomCredentialRecord) -> None:
+        _validate_room_credential(record)
+        self._executor.exec(
+            """
+            INSERT INTO room_credentials (
+                singleton_id, invite_token_hash, invite_generation,
+                created_at_ms, updated_at_ms
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            _ROOM_STATE_SINGLETON_ID,
+            record.invite_token_hash,
+            record.invite_generation,
+            record.created_at_ms,
+            record.updated_at_ms,
+        )
+
+    def _replace_room_credential(self, record: RoomCredentialRecord) -> None:
+        cursor = self._executor.exec(
+            """
+            UPDATE room_credentials
+            SET invite_token_hash = ?, invite_generation = ?,
+                created_at_ms = ?, updated_at_ms = ?
+            WHERE singleton_id = ?
+            """,
+            record.invite_token_hash,
+            record.invite_generation,
+            record.created_at_ms,
+            record.updated_at_ms,
+            _ROOM_STATE_SINGLETON_ID,
+        )
+        rows_written = _rows_written(cursor)
+        if rows_written is not None and rows_written != 1:
+            raise CorruptRoomStateError("room credentials disappeared during commit")
+
     def _replace_players(self, players: Sequence[PlayerRecord]) -> None:
         self._executor.exec("DELETE FROM players")
         seen_ids: set[str] = set()
@@ -914,6 +1629,35 @@ class RoomRepository:
                 player.updated_at_ms,
                 player.left_at_ms,
             )
+        stale_presence = _rows(
+            self._executor.exec(
+                """
+                SELECT player_presence.player_id AS player_id
+                FROM player_presence
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM players
+                    WHERE players.player_id = player_presence.player_id
+                      AND players.left_at_ms IS NULL
+                      AND players.auth_generation = player_presence.auth_generation
+                )
+                """
+            )
+        )
+        if stale_presence:
+            self._executor.exec(
+                """
+                DELETE FROM player_presence
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM players
+                    WHERE players.player_id = player_presence.player_id
+                      AND players.left_at_ms IS NULL
+                      AND players.auth_generation = player_presence.auth_generation
+                )
+                """
+            )
+            self._advance_presence_version()
 
     def _load_players(self) -> tuple[PlayerRecord, ...]:
         rows = _rows(
@@ -930,21 +1674,7 @@ class RoomRepository:
         records: list[PlayerRecord] = []
         try:
             for row in rows:
-                left_at_ms = _row_value(row, "left_at_ms")
-                records.append(
-                    PlayerRecord(
-                        player_id=str(_row_value(row, "player_id")),
-                        seat_id=_optional_text(_row_value(row, "seat_id")),
-                        display_name=str(_row_value(row, "display_name")),
-                        role=str(_row_value(row, "role")),
-                        controller_json=str(_row_value(row, "controller_json")),
-                        token_hash=str(_row_value(row, "token_hash")),
-                        auth_generation=int(_row_value(row, "auth_generation")),
-                        joined_at_ms=int(_row_value(row, "joined_at_ms")),
-                        updated_at_ms=int(_row_value(row, "updated_at_ms")),
-                        left_at_ms=None if left_at_ms is None else int(left_at_ms),
-                    )
-                )
+                records.append(_player_record_from_row(row))
         except (TypeError, ValueError) as exc:
             raise CorruptRoomStateError("stored player projection is invalid") from exc
         return tuple(records)
@@ -1051,6 +1781,97 @@ class RoomRepository:
                 ticket.created_at_ms,
                 ticket.consumed_at_ms,
             )
+
+    def _insert_player_presence(
+        self, records: Sequence[PlayerPresenceRecord]
+    ) -> None:
+        if not records:
+            return
+        seen_ids: set[str] = set()
+        for presence in records:
+            if type(presence) is not PlayerPresenceRecord:
+                raise TypeError(
+                    "player presence projection must contain exact records"
+                )
+            _validate_player_presence(presence)
+            if presence.player_id in seen_ids:
+                raise ValueError(
+                    f"duplicate player presence projection: {presence.player_id!r}"
+                )
+            seen_ids.add(presence.player_id)
+            self._executor.exec(
+                """
+                INSERT INTO player_presence (
+                    player_id, auth_generation, disconnected_at_ms,
+                    disconnect_expires_at_ms
+                ) VALUES (?, ?, ?, ?)
+                """,
+                presence.player_id,
+                presence.auth_generation,
+                presence.disconnected_at_ms,
+                presence.disconnect_expires_at_ms,
+            )
+        self._advance_presence_version()
+
+    def _apply_player_presence_mutation(
+        self,
+        *,
+        upsert: PlayerPresenceRecord | None,
+        clear_identities: Sequence[tuple[str, int]],
+    ) -> bool:
+        """Apply one public presence change and bump its version at most once."""
+
+        changed = False
+        if upsert is not None:
+            rows = _rows(
+                self._executor.exec(
+                    """
+                    SELECT player_id, auth_generation, disconnected_at_ms,
+                           disconnect_expires_at_ms
+                    FROM player_presence
+                    WHERE player_id = ?
+                    """,
+                    upsert.player_id,
+                )
+            )
+            previous = None if not rows else _player_presence_from_row(rows[0])
+            # An error callback followed by close callback cannot restart or
+            # extend the first disconnect grace period.
+            if previous is None or previous.auth_generation != upsert.auth_generation:
+                self._executor.exec(
+                    """
+                    INSERT INTO player_presence (
+                        player_id, auth_generation, disconnected_at_ms,
+                        disconnect_expires_at_ms
+                    ) VALUES (?, ?, ?, ?)
+                    ON CONFLICT(player_id) DO UPDATE SET
+                        auth_generation = excluded.auth_generation,
+                        disconnected_at_ms = excluded.disconnected_at_ms,
+                        disconnect_expires_at_ms = excluded.disconnect_expires_at_ms
+                    """,
+                    upsert.player_id,
+                    upsert.auth_generation,
+                    upsert.disconnected_at_ms,
+                    upsert.disconnect_expires_at_ms,
+                )
+                changed = True
+
+        for player_id, auth_generation in clear_identities:
+            rows = _rows(
+                self._executor.exec(
+                    """
+                    DELETE FROM player_presence
+                    WHERE player_id = ? AND auth_generation = ?
+                    RETURNING player_id
+                    """,
+                    player_id,
+                    auth_generation,
+                )
+            )
+            changed = bool(rows) or changed
+        if changed:
+            self._advance_presence_version()
+        return changed
 
 
 def _record_from_state(state: RoomState) -> RoomStateRecord:
@@ -1189,6 +2010,48 @@ def _canonicalize_json_text(value: str, name: str) -> str:
     return _canonical_json_value(decoded, name)
 
 
+def _player_record_from_row(row: Any) -> PlayerRecord:
+    left_at_ms = _row_value(row, "left_at_ms")
+    return PlayerRecord(
+        player_id=str(_row_value(row, "player_id")),
+        seat_id=_optional_text(_row_value(row, "seat_id")),
+        display_name=str(_row_value(row, "display_name")),
+        role=str(_row_value(row, "role")),
+        controller_json=str(_row_value(row, "controller_json")),
+        token_hash=str(_row_value(row, "token_hash")),
+        auth_generation=int(_row_value(row, "auth_generation")),
+        joined_at_ms=int(_row_value(row, "joined_at_ms")),
+        updated_at_ms=int(_row_value(row, "updated_at_ms")),
+        left_at_ms=None if left_at_ms is None else int(left_at_ms),
+    )
+
+
+def _player_presence_from_row(row: Any) -> PlayerPresenceRecord:
+    expires_at_ms = _row_value(row, "disconnect_expires_at_ms")
+    return PlayerPresenceRecord(
+        player_id=str(_row_value(row, "player_id")),
+        auth_generation=int(_row_value(row, "auth_generation")),
+        disconnected_at_ms=int(_row_value(row, "disconnected_at_ms")),
+        disconnect_expires_at_ms=(
+            None if expires_at_ms is None else int(expires_at_ms)
+        ),
+    )
+
+
+def _validate_player_presence(presence: PlayerPresenceRecord) -> None:
+    _require_text(presence.player_id, "player_id")
+    _require_non_negative_int(presence.auth_generation, "auth_generation")
+    _require_non_negative_int(presence.disconnected_at_ms, "disconnected_at_ms")
+    if presence.disconnect_expires_at_ms is not None:
+        _require_non_negative_int(
+            presence.disconnect_expires_at_ms, "disconnect_expires_at_ms"
+        )
+        if presence.disconnect_expires_at_ms < presence.disconnected_at_ms:
+            raise ValueError(
+                "disconnect_expires_at_ms cannot precede disconnected_at_ms"
+            )
+
+
 def _validate_player(player: PlayerRecord) -> None:
     _require_text(player.player_id, "player_id")
     _require_text(player.display_name, "display_name")
@@ -1208,6 +2071,43 @@ def _validate_player(player: PlayerRecord) -> None:
             raise ValueError("player left_at_ms must be at or after joined_at_ms")
         if player.updated_at_ms < player.left_at_ms:
             raise ValueError("player updated_at_ms must be at or after left_at_ms")
+
+
+def _validate_room_credential(record: RoomCredentialRecord) -> None:
+    _require_sha256_hex(record.invite_token_hash, "invite_token_hash")
+    _require_non_negative_int(record.invite_generation, "invite_generation")
+    _require_non_negative_int(record.created_at_ms, "created_at_ms")
+    _require_non_negative_int(record.updated_at_ms, "updated_at_ms")
+    if record.updated_at_ms < record.created_at_ms:
+        raise ValueError("credential updated_at_ms cannot precede created_at_ms")
+
+
+def _validate_room_credential_transition(
+    previous: RoomCredentialRecord, candidate: RoomCredentialRecord
+) -> None:
+    if candidate.created_at_ms != previous.created_at_ms:
+        raise PlayerProjectionError("invite credential created_at_ms is immutable")
+    if candidate.invite_generation != previous.invite_generation + 1:
+        raise PlayerProjectionError("invite generation must advance exactly once")
+    if candidate.invite_token_hash == previous.invite_token_hash:
+        raise PlayerProjectionError("rotated invite token hash must change")
+    if candidate.updated_at_ms < previous.updated_at_ms:
+        raise PlayerProjectionError("invite credential timestamp cannot regress")
+
+
+def _validate_public_event_details(value: Mapping[str, object]) -> None:
+    forbidden_fragments = ("token", "secret", "ticket", "hash", "credential")
+    for key, item in value.items():
+        if not isinstance(key, str) or not key:
+            raise ValueError("public event detail keys must be non-empty strings")
+        folded = key.casefold()
+        if any(fragment in folded for fragment in forbidden_fragments):
+            raise ValueError("public event details cannot contain credential material")
+        if item is None or isinstance(item, (str, bool)):
+            continue
+        if isinstance(item, int) and not isinstance(item, bool):
+            continue
+        raise ValueError("public event detail values must be scalar JSON values")
 
 
 def _validate_event(event: ProjectedAuditEvent) -> None:
@@ -1250,6 +2150,13 @@ def _audit_payload_json(payload: SafeAuditPayload) -> str:
             "previousRevision": payload.previous_revision,
             "revision": payload.revision,
         }
+    elif type(payload) is LobbyAuditPayload:
+        value = {
+            "type": payload.event_type,
+            "roomId": payload.room_id,
+            "revision": payload.revision,
+            "details": payload.details,
+        }
     else:
         raise TypeError("audit payload type is not allow-listed")
     return _canonical_json_value(value, "audit payload")
@@ -1291,6 +2198,17 @@ def _parse_audit_payload(event_type: str, event_json: str) -> SafeAuditPayload:
                 room_id=value["roomId"],
                 previous_revision=value["previousRevision"],
                 revision=value["revision"],
+            )
+        elif event_type in _LOBBY_AUDIT_EVENT_TYPES:
+            if set(value) != {"type", "roomId", "revision", "details"}:
+                raise CorruptRoomStateError(
+                    "lobby audit payload contains non-public fields"
+                )
+            payload = LobbyAuditPayload(
+                event_type=event_type,
+                room_id=value["roomId"],
+                revision=value["revision"],
+                details_json=_canonical_json_value(value["details"], "details"),
             )
         else:
             raise CorruptRoomStateError(
@@ -1361,6 +2279,10 @@ def _validate_stored_event_history(
                     "roomStateCommitted audit revisions must be unique"
                 )
             committed_revisions.add(event.revision)
+        elif type(event.payload) is LobbyAuditPayload:
+            # Several separately useful public facts (for example a departure
+            # and deterministic host transfer) may share one canonical commit.
+            pass
         else:  # Defensive: StoredAuditEvent construction is otherwise public.
             raise CorruptRoomStateError("stored audit payload type is not allow-listed")
 
@@ -1626,6 +2548,8 @@ def _validate_security_references(
     commands: Sequence[ProcessedCommandRecord],
     tickets: Sequence[SocketTicketRecord],
     players: Sequence[PlayerRecord],
+    *,
+    allowed_command_player_ids: set[str],
 ) -> None:
     active = {
         player.player_id: player
@@ -1633,9 +2557,10 @@ def _validate_security_references(
         if player.left_at_ms is None
     }
     for command in commands:
-        if command.player_id not in active:
+        if command.player_id not in allowed_command_player_ids:
             raise PlayerProjectionError(
-                "processed command must reference an active player"
+                "processed command must reference an active player or the player "
+                "revoked by this commit"
             )
     for ticket in tickets:
         player = active.get(ticket.player_id)
@@ -1647,6 +2572,66 @@ def _validate_security_references(
             raise PlayerProjectionError(
                 "socket ticket auth_generation must match its active player"
             )
+
+
+def _validate_presence_references(
+    records: Sequence[PlayerPresenceRecord],
+    players: Sequence[PlayerRecord],
+) -> None:
+    active = {
+        player.player_id: player
+        for player in players
+        if player.left_at_ms is None
+    }
+    seen_ids: set[str] = set()
+    for presence in records:
+        if type(presence) is not PlayerPresenceRecord:
+            raise TypeError("presence must contain exact PlayerPresenceRecord values")
+        _validate_player_presence(presence)
+        if presence.player_id in seen_ids:
+            raise ValueError(
+                f"duplicate player presence projection: {presence.player_id!r}"
+            )
+        seen_ids.add(presence.player_id)
+        player = active.get(presence.player_id)
+        if player is None:
+            raise PlayerProjectionError(
+                "player presence must reference an active player"
+            )
+        if player.auth_generation != presence.auth_generation:
+            raise PlayerProjectionError(
+                "player presence auth_generation must match its active player"
+            )
+
+
+def _normalize_player_identities(
+    identities: Sequence[tuple[str, int]],
+) -> tuple[tuple[str, int], ...]:
+    normalized: set[tuple[str, int]] = set()
+    for identity in identities:
+        if type(identity) is not tuple or len(identity) != 2:
+            raise TypeError(
+                "player identities must be (player_id, auth_generation) tuples"
+            )
+        player_id = _identity_text(identity[0], "player_id")
+        generation = _require_non_negative_int(identity[1], "auth_generation")
+        normalized.add((player_id, generation))
+    return tuple(sorted(normalized))
+
+
+def _validate_connected_presence_references(
+    identities: Sequence[tuple[str, int]],
+    players: Sequence[PlayerRecord],
+) -> None:
+    active = {
+        (player.player_id, player.auth_generation)
+        for player in players
+        if player.left_at_ms is None
+    }
+    if any(identity not in active for identity in identities):
+        raise PlayerProjectionError(
+            "connected player presence must reference an active auth generation"
+        )
 
 
 def _validate_processed_command(command: ProcessedCommandRecord) -> None:
@@ -1775,6 +2760,7 @@ __all__ = [
     "CloudflareSqlExecutor",
     "CorruptRoomStateError",
     "PersistenceError",
+    "LobbyAuditPayload",
     "PlayerProjectionError",
     "PlayerRecord",
     "ProcessedCommandConflictError",
@@ -1782,6 +2768,7 @@ __all__ = [
     "ProjectedAuditEvent",
     "RevisionConflictError",
     "RoomAlreadyExistsError",
+    "RoomCredentialRecord",
     "RoomNotFoundError",
     "RoomInitializedAuditPayload",
     "RoomRepository",
@@ -1790,6 +2777,7 @@ __all__ = [
     "SQLiteSqlExecutor",
     "SafeAuditPayload",
     "SocketTicketRecord",
+    "SocketTicketUnavailableError",
     "SqliteSqlExecutor",
     "StoredAuditEvent",
     "SynchronousSqlExecutor",

@@ -145,7 +145,7 @@ class GameConfigTests(unittest.TestCase):
         rules = SingaporeRules()
         self.assertEqual(rules.ruleset_id, "singapore")
         self.assertEqual(rules.ruleset_version, "0.1.0")
-        self.assertEqual(rules.state_schema_version, 1)
+        self.assertEqual(rules.state_schema_version, 2)
         self.assertEqual(rules.seat_count, 4)
         self.assertEqual(rules.tile_count, 148)
         self.assertEqual(rules.reserve_tile_count, 15)
@@ -778,18 +778,33 @@ class SnapshotAndEngineTests(unittest.TestCase):
         encoded = self.room.canonical_json()
         self.assertEqual(encoded, self.room.canonical_json())
         self.assertIn('"roomId":"room-1"', encoded)
-        self.assertIn('"stateSchemaVersion":1', encoded)
+        self.assertIn('"stateSchemaVersion":2', encoded)
         self.assertNotIn("room_id", encoded)
         self.assertEqual(deserialize_room_state(encoded), self.room)
         self.assertEqual(deserialize_room_state(encoded).canonical_json(), encoded)
         self.assertEqual(list(json.loads(encoded)), sorted(json.loads(encoded)))
+
+    def test_schema_v1_snapshot_upgrades_without_changing_revision(self) -> None:
+        data = json.loads(self.room.canonical_json())
+        data["stateSchemaVersion"] = 1
+        data["revision"] = 7
+        upgraded = deserialize_room_state(json.dumps(data))
+        self.assertEqual(upgraded.state_schema_version, 2)
+        self.assertEqual(upgraded.revision, 7)
+        self.assertIn('"stateSchemaVersion":2', upgraded.canonical_json())
+
+    def test_schema_boolean_is_not_mistaken_for_v1(self) -> None:
+        data = json.loads(self.room.canonical_json())
+        data["stateSchemaVersion"] = True
+        with self.assertRaises(ValidationError):
+            deserialize_room_state(json.dumps(data))
 
     def test_rejects_wrong_ruleset_or_schema_version(self) -> None:
         data = json.loads(self.room.canonical_json())
         for key, bad_value in (
             ("rulesetId", "other"),
             ("rulesetVersion", "9.9.9"),
-            ("stateSchemaVersion", 2),
+            ("stateSchemaVersion", 3),
         ):
             changed = {**data, key: bad_value}
             with self.subTest(key=key), self.assertRaises(ValidationError):
