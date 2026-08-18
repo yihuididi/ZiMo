@@ -16,7 +16,7 @@ class UnsupportedConfigurationError(ValueError):
 class SingaporeRules(GameModel):
     RULESET_ID: ClassVar[str] = "singapore"
     RULESET_VERSION: ClassVar[str] = "0.1.0"
-    STATE_SCHEMA_VERSION: ClassVar[int] = 1
+    STATE_SCHEMA_VERSION: ClassVar[int] = 2
     SEAT_COUNT: ClassVar[int] = 4
     TILE_COUNT: ClassVar[int] = 148
     RESERVE_TILE_COUNT: ClassVar[int] = 15
@@ -24,7 +24,7 @@ class SingaporeRules(GameModel):
 
     ruleset_id: Literal["singapore"] = "singapore"
     ruleset_version: Literal["0.1.0"] = "0.1.0"
-    state_schema_version: Literal[1] = 1
+    state_schema_version: Literal[2] = 2
     seat_count: Literal[4] = 4
     tile_count: Literal[148] = 148
     reserve_tile_count: Literal[15] = 15

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field
 
@@ -45,6 +45,18 @@ from .public import (
 
 class ObservationError(ValueError):
     """Raised when no authorized player observation can be constructed."""
+
+
+RoomCapability: TypeAlias = Literal[
+    "multiplayerLobby",
+    "roomEvents",
+    "hibernatingWebSockets",
+]
+MILESTONE_2_CAPABILITIES: tuple[RoomCapability, ...] = (
+    "multiplayerLobby",
+    "roomEvents",
+    "hibernatingWebSockets",
+)
 
 
 class ObservedOccupant(GameModel):
@@ -104,7 +116,7 @@ class PhaseObservation(GameModel):
 class MatchObservation(GameModel):
     status: MatchStatus
     prevailing_wind: Wind
-    dealer_seat_id: SeatId
+    dealer_seat_id: SeatId | None
     phase: PhaseObservation | None = None
     live_wall_tile_count: int = Field(default=0, ge=0)
     reserve_wall_tile_count: int = Field(default=0, ge=0)
@@ -122,7 +134,7 @@ class PlayerObservation(GameModel):
     ruleset_id: str
     ruleset_version: str
     state_schema_version: int = Field(ge=1)
-    capabilities: tuple[()] = ()
+    capabilities: tuple[RoomCapability, ...] = MILESTONE_2_CAPABILITIES
     config: GameConfig
     viewer_player_id: PlayerId
     seats: tuple[SeatObservation, ...]
@@ -149,12 +161,13 @@ def _occupant(room: RoomState, seat_id: SeatId) -> ObservedOccupant | None:
         return ObservedOccupant(
             controller_type="automated",
             display_name=seat.occupant_name,
+            ready=True,
         )
     raise TypeError(f"unsupported controller descriptor: {type(controller)!r}")
 
 
 def _seat_winds(room: RoomState) -> dict[SeatId, Wind]:
-    if room.match is None:
+    if room.match is None or room.match.dealer_seat_id is None:
         return {}
     seats = sorted(room.seats, key=lambda seat: seat.slot)
     dealer_index = next(
@@ -201,7 +214,7 @@ def build_player_observation(
     room: RoomState,
     viewer_player_id: PlayerId,
     *,
-    capabilities: tuple[()] = (),
+    capabilities: tuple[RoomCapability, ...] = MILESTONE_2_CAPABILITIES,
 ) -> PlayerObservation:
     """Build an observation solely from explicitly selected safe fields."""
 

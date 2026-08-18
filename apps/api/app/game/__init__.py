@@ -104,12 +104,14 @@ from .model import (
     standard_seats,
 )
 from .observation import (
+    MILESTONE_2_CAPABILITIES,
     MatchObservation,
     ObservationError,
     OpponentSeatObservation,
     OwnSeatObservation,
     PhaseObservation,
     PlayerObservation,
+    RoomCapability,
     SeatObservation,
     build_player_observation,
 )
@@ -197,6 +199,7 @@ __all__ = [
     "KongReplacementPhase",
     "KongRobberyPhase",
     "MILESTONE_1_CAPABILITIES",
+    "MILESTONE_2_CAPABILITIES",
     "MatchId",
     "MatchObservation",
     "MatchResult",
@@ -240,6 +243,7 @@ __all__ = [
     "RandomBotPolicy",
     "RandomSource",
     "RoomId",
+    "RoomCapability",
     "RoomState",
     "RoomStatus",
     "SeatBalance",

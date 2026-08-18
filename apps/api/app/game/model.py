@@ -119,6 +119,7 @@ class RoomStatus(StrEnum):
 
 
 class MatchStatus(StrEnum):
+    PENDING_SETUP = "PENDING_SETUP"
     ACTIVE = "ACTIVE"
     FINISHED = "FINISHED"
 
@@ -227,6 +228,8 @@ class SeatState(GameModel):
     def validate_occupancy(self) -> "SeatState":
         if self.controller is None and self.occupant_name is not None:
             raise ValueError("an empty seat cannot have an occupant name")
+        if self.controller is not None and self.occupant_name is None:
+            raise ValueError("an occupied seat requires an occupant name")
         return self
 
 
@@ -667,7 +670,7 @@ class MatchState(GameModel):
     match_id: MatchId = Field(min_length=1)
     status: MatchStatus = MatchStatus.ACTIVE
     prevailing_wind: Wind = Wind.EAST
-    dealer_seat_id: SeatId = Field(min_length=1)
+    dealer_seat_id: SeatId | None = Field(min_length=1)
     current_hand: HandState | None = None
     hand_history: tuple[HandResult, ...] = ()
     balances: tuple[SeatBalance, ...]
@@ -680,7 +683,7 @@ class MatchState(GameModel):
         seat_ids = [balance.seat_id for balance in self.balances]
         if len(seat_ids) != len(set(seat_ids)):
             raise ValueError("match balances must have unique seat IDs")
-        if self.dealer_seat_id not in set(seat_ids):
+        if self.dealer_seat_id is not None and self.dealer_seat_id not in set(seat_ids):
             raise ValueError("dealer_seat_id must identify a match seat")
         seat_id_set = set(seat_ids)
         if self.current_hand is not None and {
@@ -701,12 +704,27 @@ class MatchState(GameModel):
                 raise ValueError(
                     "hand history result payment references an unknown seat"
                 )
-        if self.status is MatchStatus.ACTIVE:
+        if self.status is MatchStatus.PENDING_SETUP:
+            if self.dealer_seat_id is not None or self.current_hand is not None:
+                raise ValueError(
+                    "a pending-setup match cannot have a dealer or current hand"
+                )
+            if self.hand_history or self.result is not None:
+                raise ValueError(
+                    "a pending-setup match cannot have history or a result"
+                )
+            if any(balance.points != 0 for balance in self.balances):
+                raise ValueError("a pending-setup match requires zero balances")
+        elif self.status is MatchStatus.ACTIVE:
+            if self.dealer_seat_id is None:
+                raise ValueError("an active match requires a dealer")
             if self.current_hand is None:
                 raise ValueError("an active match requires a current hand")
             if self.result is not None:
                 raise ValueError("an active match cannot have a result")
         else:
+            if self.dealer_seat_id is None:
+                raise ValueError("a finished match requires its final dealer")
             if self.current_hand is not None:
                 raise ValueError("a finished match cannot retain a current hand")
             if self.result is None:
@@ -722,7 +740,7 @@ class RoomState(GameModel):
     room_id: RoomId = Field(min_length=1)
     ruleset_id: Literal["singapore"] = "singapore"
     ruleset_version: Literal["0.1.0"] = "0.1.0"
-    state_schema_version: Literal[1] = 1
+    state_schema_version: Literal[2] = 2
     revision: int = Field(default=0, ge=0)
     config: GameConfig = Field(default_factory=GameConfig)
     status: RoomStatus = RoomStatus.CREATED
@@ -763,28 +781,54 @@ class RoomState(GameModel):
             raise ValueError("a non-empty room must have exactly one host")
 
         external_player_ids: list[PlayerId] = []
+        players_by_id = {player.player_id: player for player in self.players}
         for seat in self.seats:
             if isinstance(seat.controller, ExternalSeatController):
                 external_player_ids.append(seat.controller.player_id)
+                player = players_by_id.get(seat.controller.player_id)
+                if player is not None and seat.occupant_name != player.display_name:
+                    raise ValueError(
+                        "an external seat occupant name must match its player"
+                    )
         if len(external_player_ids) != len(set(external_player_ids)):
             raise ValueError("an external player cannot control more than one seat")
         if set(external_player_ids) != set(player_ids):
             raise ValueError("every room player must control exactly one external seat")
 
         if self.status is RoomStatus.IN_MATCH:
-            if self.match is None or self.match.status is not MatchStatus.ACTIVE:
-                raise ValueError("IN_MATCH rooms require an active match")
+            if self.match is None or self.match.status not in {
+                MatchStatus.PENDING_SETUP,
+                MatchStatus.ACTIVE,
+            }:
+                raise ValueError("IN_MATCH rooms require a pending or active match")
             if any(seat.controller is None for seat in self.seats):
                 raise ValueError("IN_MATCH rooms require four occupied seats")
+            if (
+                self.match.status is MatchStatus.PENDING_SETUP
+                and any(not player.ready for player in self.players)
+            ):
+                raise ValueError(
+                    "a pending-setup match requires every human player ready"
+                )
         elif self.status is RoomStatus.READY:
             if any(seat.controller is None for seat in self.seats):
                 raise ValueError("READY rooms require four occupied seats")
             if any(not player.ready for player in self.players):
                 raise ValueError("READY rooms require every human player to be ready")
+        elif self.status is RoomStatus.WAITING_FOR_PLAYERS:
+            if all(seat.controller is not None for seat in self.seats) and all(
+                player.ready for player in self.players
+            ):
+                raise ValueError(
+                    "a fully occupied room with every human ready must be READY"
+                )
         elif self.status is RoomStatus.FINISHED:
             if self.match is not None and self.match.status is not MatchStatus.FINISHED:
                 raise ValueError("FINISHED rooms cannot retain an active match")
-        elif self.match is not None and self.status is not RoomStatus.FINISHED:
+        if self.match is not None and self.status not in {
+            RoomStatus.IN_MATCH,
+            RoomStatus.FINISHED,
+        }:
             raise ValueError("only IN_MATCH or FINISHED rooms may contain a match")
         if self.match is not None and {
             balance.seat_id for balance in self.match.balances

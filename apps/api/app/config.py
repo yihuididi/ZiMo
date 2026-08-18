@@ -46,10 +46,9 @@ class Settings(BaseModel):
 
     @property
     def cors_origins(self) -> list[str]:
-        origins = [LOCAL_FRONTEND_ORIGIN]
-        if self.frontend_origin and self.frontend_origin not in origins:
-            origins.append(self.frontend_origin.rstrip("/"))
-        return origins
+        # A credential-capable room API must never reflect or broaden origins.
+        # Local development gets the same single-origin policy as production.
+        return [(self.frontend_origin or LOCAL_FRONTEND_ORIGIN).rstrip("/")]
 
     @property
     def supabase_is_configured(self) -> bool:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Annotated, Literal
 
 from pydantic import Field
@@ -24,11 +25,13 @@ from .model import (
     WindowId,
 )
 from .observation import (
+    MILESTONE_2_CAPABILITIES,
     OpponentSeatObservation,
     ObservedOccupant,
     OwnSeatObservation,
     PhaseObservation,
     PlayerObservation,
+    RoomCapability,
     build_player_observation,
 )
 from .public import PublicDiscardView, PublicMeldView, PublicTileView
@@ -40,6 +43,9 @@ class OpaqueActionDescriptor(GameModel):
     action_id: str = Field(min_length=1, max_length=256)
     label: str = Field(min_length=1, max_length=128)
     enabled: bool = True
+    tone: Literal["primary", "neutral", "danger"] | None = None
+    disabled_reason: str | None = Field(default=None, min_length=1, max_length=256)
+    presentation_slot: Literal["roomActions", "invitation"] = "roomActions"
 
 
 class PublicPlayerView(GameModel):
@@ -47,6 +53,8 @@ class PublicPlayerView(GameModel):
     display_name: str
     role: PlayerRole
     ready: bool
+    connection_status: Literal["CONNECTED", "DISCONNECTED"] = "CONNECTED"
+    disconnect_expires_at_ms: int | None = Field(default=None, ge=0)
 
 
 class PublicOccupantView(GameModel):
@@ -90,7 +98,7 @@ PublicSeatView = Annotated[
 class PublicGameView(GameModel):
     status: MatchStatus
     prevailing_wind: Wind
-    dealer_seat_id: SeatId
+    dealer_seat_id: SeatId | None
     phase: PhaseObservation | None = None
     live_wall_tile_count: int = Field(default=0, ge=0)
     reserve_wall_tile_count: int = Field(default=0, ge=0)
@@ -104,11 +112,12 @@ class PublicRoomView(GameModel):
     api_version: Literal["1"] = "1"
     room_id: RoomId
     revision: int = Field(ge=0)
+    presence_version: int = Field(default=0, ge=0)
     status: RoomStatus
     ruleset_id: str
     ruleset_version: str
     state_schema_version: int = Field(ge=1)
-    capabilities: tuple[()] = ()
+    capabilities: tuple[RoomCapability, ...] = MILESTONE_2_CAPABILITIES
     config: GameConfig
     viewer_player_id: PlayerId
     server_time_ms: int = Field(ge=0)
@@ -173,10 +182,12 @@ def build_public_room_view(
     viewer_player_id: PlayerId,
     *,
     server_time_ms: int,
-    capabilities: tuple[()] = (),
+    capabilities: tuple[RoomCapability, ...] = MILESTONE_2_CAPABILITIES,
     actions: tuple[OpaqueActionDescriptor, ...] = (),
     deadline_ms: int | None = None,
     window_id: WindowId | None = None,
+    disconnected_players: Mapping[str, int | None] | None = None,
+    presence_version: int = 0,
 ) -> PublicRoomView:
     """Build a UI view without accepting or serializing domain action objects."""
 
@@ -198,9 +209,11 @@ def build_public_room_view(
             result=match.result,
             match_result=match.match_result,
         )
+    presence = {} if disconnected_players is None else disconnected_players
     return PublicRoomView(
         room_id=room.room_id,
         revision=room.revision,
+        presence_version=presence_version,
         status=room.status,
         ruleset_id=room.ruleset_id,
         ruleset_version=room.ruleset_version,
@@ -217,6 +230,12 @@ def build_public_room_view(
                 display_name=player.display_name,
                 role=player.role,
                 ready=player.ready,
+                connection_status=(
+                    "DISCONNECTED"
+                    if str(player.player_id) in presence
+                    else "CONNECTED"
+                ),
+                disconnect_expires_at_ms=presence.get(str(player.player_id)),
             )
             for player in room.players
         ),
