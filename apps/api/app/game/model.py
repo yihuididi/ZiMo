@@ -456,189 +456,218 @@ class HandState(GameModel):
 
     @model_validator(mode="after")
     def validate_hand(self) -> "HandState":
-        if len(self.player_hands) != 4:
-            raise ValueError("a Singapore Mahjong hand requires exactly four seats")
-        seat_ids = [hand.seat_id for hand in self.player_hands]
-        if len(seat_ids) != len(set(seat_ids)):
-            raise ValueError("player_hands must have unique seat IDs")
-        sequences = [discard.sequence for discard in self.discards]
-        if sequences != list(range(1, len(sequences) + 1)):
-            raise ValueError("discard sequences must be contiguous starting at one")
-        payment_sequences = [payment.sequence for payment in self.payments]
-        if payment_sequences != list(range(1, len(payment_sequences) + 1)):
-            raise ValueError("payment sequences must be contiguous starting at one")
-        if isinstance(self.phase, CompletePhase) != (self.result is not None):
-            raise ValueError("complete phase and hand result must be set together")
-
+        seat_ids = _validate_hand_shape_and_sequences(self)
         seat_id_set = set(seat_ids)
-        if any(
-            discard.discarded_by_seat_id not in seat_id_set
-            or (
-                discard.claimed_by_seat_id is not None
-                and discard.claimed_by_seat_id not in seat_id_set
-            )
-            for discard in self.discards
-        ):
-            raise ValueError("discard references an unknown seat")
-        phase_seat_ids: tuple[SeatId, ...]
-        if isinstance(
-            self.phase,
-            (AwaitingDrawPhase, AwaitingDiscardPhase, KongReplacementPhase),
-        ):
-            phase_seat_ids = (self.phase.seat_id,)
-        elif isinstance(self.phase, DiscardClaimsPhase):
-            phase_seat_ids = self.phase.eligible_seat_ids
-        elif isinstance(self.phase, KongRobberyPhase):
-            phase_seat_ids = (
-                self.phase.declaring_seat_id,
-                *self.phase.eligible_seat_ids,
-            )
-        else:
-            phase_seat_ids = ()
-        if not set(phase_seat_ids).issubset(seat_id_set):
-            raise ValueError("hand phase references an unknown seat")
-        if len(phase_seat_ids) != len(set(phase_seat_ids)):
-            raise ValueError("hand phase seat IDs must be unique")
-        if isinstance(self.phase, DiscardClaimsPhase) and (
-            not self.discards
-            or self.phase.discard_sequence != self.discards[-1].sequence
-        ):
-            raise ValueError(
-                "discard claim phase must identify the current ledger discard"
-            )
-
-        if any(claim.seat_id not in seat_id_set for claim in self.pending_claims):
-            raise ValueError("pending claim references an unknown seat")
-        claim_keys = [
-            (claim.window_id, claim.seat_id) for claim in self.pending_claims
-        ]
-        if len(claim_keys) != len(set(claim_keys)):
-            raise ValueError("a seat can submit only one claim per window")
-        active_window_id = (
-            self.phase.window_id
-            if isinstance(self.phase, (DiscardClaimsPhase, KongRobberyPhase))
-            else None
-        )
-        if any(claim.window_id != active_window_id for claim in self.pending_claims):
-            raise ValueError("pending claims must belong to the active claim window")
-        eligible_claim_seat_ids = (
-            set(self.phase.eligible_seat_ids)
-            if isinstance(self.phase, (DiscardClaimsPhase, KongRobberyPhase))
-            else set()
-        )
-        if any(
-            claim.seat_id not in eligible_claim_seat_ids
-            for claim in self.pending_claims
-        ):
-            raise ValueError("pending claim seat is not eligible for the active phase")
-        if any(
-            payment.payer_seat_id not in seat_id_set
-            or payment.recipient_seat_id not in seat_id_set
-            for payment in self.payments
-        ):
-            raise ValueError("payment references an unknown seat")
-        if self.result is not None:
-            if any(
-                seat_id is not None and seat_id not in seat_id_set
-                for seat_id in (
-                    self.result.winner_seat_id,
-                    self.result.provider_seat_id,
-                )
-            ):
-                raise ValueError("hand result references an unknown seat")
-            if any(
-                payment.payer_seat_id not in seat_id_set
-                or payment.recipient_seat_id not in seat_id_set
-                for payment in self.result.payments
-            ):
-                raise ValueError("hand result payment references an unknown seat")
-
-        live_tile_ids = {
-            tile.tile_id for tile in (*self.wall.live_tiles, *self.wall.reserve_tiles)
-        }
-        held_tiles: list[tuple[PhysicalTile, SeatId, str]] = []
-        for hand in self.player_hands:
-            held_tiles.extend(
-                (tile, hand.seat_id, "concealed") for tile in hand.concealed_tiles
-            )
-            held_tiles.extend(
-                (tile, hand.seat_id, "bonus") for tile in hand.bonus_tiles
-            )
-            held_tiles.extend(
-                (tile, hand.seat_id, "meld")
-                for meld in hand.melds
-                for tile in meld.tiles
-            )
-            if hand.drawn_tile is not None:
-                held_tiles.append((hand.drawn_tile, hand.seat_id, "drawn"))
-        held_tile_ids = [tile.tile_id for tile, _, _ in held_tiles]
-        if live_tile_ids.intersection(held_tile_ids):
-            raise ValueError("a physical tile cannot be both in the wall and held")
-        if len(held_tile_ids) != len(set(held_tile_ids)):
-            raise ValueError("a physical tile cannot be held by more than one seat")
-
-        discard_tile_ids = [discard.tile.tile_id for discard in self.discards]
-        if len(discard_tile_ids) != len(set(discard_tile_ids)):
-            raise ValueError("a physical tile cannot appear in the discard ledger twice")
-        if live_tile_ids.intersection(discard_tile_ids):
-            raise ValueError("a physical tile cannot be both in the wall and discarded")
-        held_by_id = {
-            tile.tile_id: (tile, seat_id, location)
-            for tile, seat_id, location in held_tiles
-        }
-        meld_claim_kinds = {ClaimKind.CHOW, ClaimKind.PONG, ClaimKind.KONG}
-        meld_kind_to_claim_kind = {
-            MeldKind.CHOW: ClaimKind.CHOW,
-            MeldKind.PONG: ClaimKind.PONG,
-            MeldKind.KONG: ClaimKind.KONG,
-        }
-        discards_by_sequence = {
-            discard.sequence: discard for discard in self.discards
-        }
-        claimed_meld_sequences: set[int] = set()
-        for hand in self.player_hands:
-            for meld in hand.melds:
-                if meld.discard_sequence is None:
-                    continue
-                discard = discards_by_sequence.get(meld.discard_sequence)
-                if discard is None:
-                    raise ValueError(
-                        "claimed meld provenance references an unknown discard"
-                    )
-                if meld.discard_sequence in claimed_meld_sequences:
-                    raise ValueError(
-                        "a ledger discard cannot provide more than one claimed meld"
-                    )
-                if (
-                    discard.claim_kind is not meld_kind_to_claim_kind[meld.kind]
-                    or discard.claimed_by_seat_id != hand.seat_id
-                    or discard.discarded_by_seat_id != meld.claimed_from_seat_id
-                    or discard.tile not in meld.tiles
-                ):
-                    raise ValueError(
-                        "claimed meld provenance does not match its ledger discard"
-                    )
-                claimed_meld_sequences.add(meld.discard_sequence)
-        for discard in self.discards:
-            held = held_by_id.get(discard.tile.tile_id)
-            if discard.claim_kind in meld_claim_kinds:
-                if (
-                    discard.sequence not in claimed_meld_sequences
-                    or held is None
-                    or held[1] != discard.claimed_by_seat_id
-                    or held[2] != "meld"
-                    or held[0] != discard.tile
-                ):
-                    raise ValueError(
-                        "a meld-claimed discard must be the same physical tile in "
-                        "the claimant's meld"
-                    )
-            elif held is not None:
-                raise ValueError(
-                    "only a Chow, Pong, or Kong claimed discard may also appear "
-                    "in a player's held tiles"
-                )
+        _validate_hand_phase_references(self, seat_id_set)
+        _validate_pending_claims(self, seat_id_set)
+        _validate_payment_and_result_references(self, seat_id_set)
+        held_tiles = _collect_held_tiles(self)
+        held_by_id = _validate_tile_conservation(self, held_tiles)
+        _validate_claimed_meld_provenance(self, held_by_id)
         return self
+
+
+def _validate_hand_shape_and_sequences(hand: HandState) -> tuple[SeatId, ...]:
+    if len(hand.player_hands) != 4:
+        raise ValueError("a Singapore Mahjong hand requires exactly four seats")
+    seat_ids = tuple(player_hand.seat_id for player_hand in hand.player_hands)
+    if len(seat_ids) != len(set(seat_ids)):
+        raise ValueError("player_hands must have unique seat IDs")
+    sequences = [discard.sequence for discard in hand.discards]
+    if sequences != list(range(1, len(sequences) + 1)):
+        raise ValueError("discard sequences must be contiguous starting at one")
+    payment_sequences = [payment.sequence for payment in hand.payments]
+    if payment_sequences != list(range(1, len(payment_sequences) + 1)):
+        raise ValueError("payment sequences must be contiguous starting at one")
+    if isinstance(hand.phase, CompletePhase) != (hand.result is not None):
+        raise ValueError("complete phase and hand result must be set together")
+    return seat_ids
+
+
+def _validate_hand_phase_references(
+    hand: HandState, seat_id_set: set[SeatId]
+) -> None:
+    if any(
+        discard.discarded_by_seat_id not in seat_id_set
+        or (
+            discard.claimed_by_seat_id is not None
+            and discard.claimed_by_seat_id not in seat_id_set
+        )
+        for discard in hand.discards
+    ):
+        raise ValueError("discard references an unknown seat")
+    phase_seat_ids: tuple[SeatId, ...]
+    if isinstance(
+        hand.phase,
+        (AwaitingDrawPhase, AwaitingDiscardPhase, KongReplacementPhase),
+    ):
+        phase_seat_ids = (hand.phase.seat_id,)
+    elif isinstance(hand.phase, DiscardClaimsPhase):
+        phase_seat_ids = hand.phase.eligible_seat_ids
+    elif isinstance(hand.phase, KongRobberyPhase):
+        phase_seat_ids = (
+            hand.phase.declaring_seat_id,
+            *hand.phase.eligible_seat_ids,
+        )
+    else:
+        phase_seat_ids = ()
+    if not set(phase_seat_ids).issubset(seat_id_set):
+        raise ValueError("hand phase references an unknown seat")
+    if len(phase_seat_ids) != len(set(phase_seat_ids)):
+        raise ValueError("hand phase seat IDs must be unique")
+    if isinstance(hand.phase, DiscardClaimsPhase) and (
+        not hand.discards
+        or hand.phase.discard_sequence != hand.discards[-1].sequence
+    ):
+        raise ValueError("discard claim phase must identify the current ledger discard")
+
+
+def _validate_pending_claims(hand: HandState, seat_id_set: set[SeatId]) -> None:
+    if any(claim.seat_id not in seat_id_set for claim in hand.pending_claims):
+        raise ValueError("pending claim references an unknown seat")
+    claim_keys = [(claim.window_id, claim.seat_id) for claim in hand.pending_claims]
+    if len(claim_keys) != len(set(claim_keys)):
+        raise ValueError("a seat can submit only one claim per window")
+    active_window_id = (
+        hand.phase.window_id
+        if isinstance(hand.phase, (DiscardClaimsPhase, KongRobberyPhase))
+        else None
+    )
+    if any(claim.window_id != active_window_id for claim in hand.pending_claims):
+        raise ValueError("pending claims must belong to the active claim window")
+    eligible_claim_seat_ids = (
+        set(hand.phase.eligible_seat_ids)
+        if isinstance(hand.phase, (DiscardClaimsPhase, KongRobberyPhase))
+        else set()
+    )
+    if any(
+        claim.seat_id not in eligible_claim_seat_ids for claim in hand.pending_claims
+    ):
+        raise ValueError("pending claim seat is not eligible for the active phase")
+
+
+def _validate_payment_and_result_references(
+    hand: HandState, seat_id_set: set[SeatId]
+) -> None:
+    if any(
+        payment.payer_seat_id not in seat_id_set
+        or payment.recipient_seat_id not in seat_id_set
+        for payment in hand.payments
+    ):
+        raise ValueError("payment references an unknown seat")
+    if hand.result is None:
+        return
+    if any(
+        seat_id is not None and seat_id not in seat_id_set
+        for seat_id in (hand.result.winner_seat_id, hand.result.provider_seat_id)
+    ):
+        raise ValueError("hand result references an unknown seat")
+    if any(
+        payment.payer_seat_id not in seat_id_set
+        or payment.recipient_seat_id not in seat_id_set
+        for payment in hand.result.payments
+    ):
+        raise ValueError("hand result payment references an unknown seat")
+
+
+def _collect_held_tiles(
+    hand: HandState,
+) -> list[tuple[PhysicalTile, SeatId, str]]:
+    held_tiles: list[tuple[PhysicalTile, SeatId, str]] = []
+    for player_hand in hand.player_hands:
+        held_tiles.extend(
+            (tile, player_hand.seat_id, "concealed")
+            for tile in player_hand.concealed_tiles
+        )
+        held_tiles.extend(
+            (tile, player_hand.seat_id, "bonus") for tile in player_hand.bonus_tiles
+        )
+        held_tiles.extend(
+            (tile, player_hand.seat_id, "meld")
+            for meld in player_hand.melds
+            for tile in meld.tiles
+        )
+        if player_hand.drawn_tile is not None:
+            held_tiles.append((player_hand.drawn_tile, player_hand.seat_id, "drawn"))
+    return held_tiles
+
+
+def _validate_tile_conservation(
+    hand: HandState,
+    held_tiles: list[tuple[PhysicalTile, SeatId, str]],
+) -> dict[TileId, tuple[PhysicalTile, SeatId, str]]:
+    live_tile_ids = {
+        tile.tile_id for tile in (*hand.wall.live_tiles, *hand.wall.reserve_tiles)
+    }
+    held_tile_ids = [tile.tile_id for tile, _, _ in held_tiles]
+    if live_tile_ids.intersection(held_tile_ids):
+        raise ValueError("a physical tile cannot be both in the wall and held")
+    if len(held_tile_ids) != len(set(held_tile_ids)):
+        raise ValueError("a physical tile cannot be held by more than one seat")
+
+    discard_tile_ids = [discard.tile.tile_id for discard in hand.discards]
+    if len(discard_tile_ids) != len(set(discard_tile_ids)):
+        raise ValueError("a physical tile cannot appear in the discard ledger twice")
+    if live_tile_ids.intersection(discard_tile_ids):
+        raise ValueError("a physical tile cannot be both in the wall and discarded")
+    return {
+        tile.tile_id: (tile, seat_id, location)
+        for tile, seat_id, location in held_tiles
+    }
+
+
+def _validate_claimed_meld_provenance(
+    hand: HandState,
+    held_by_id: dict[TileId, tuple[PhysicalTile, SeatId, str]],
+) -> None:
+    meld_claim_kinds = {ClaimKind.CHOW, ClaimKind.PONG, ClaimKind.KONG}
+    meld_kind_to_claim_kind = {
+        MeldKind.CHOW: ClaimKind.CHOW,
+        MeldKind.PONG: ClaimKind.PONG,
+        MeldKind.KONG: ClaimKind.KONG,
+    }
+    discards_by_sequence = {discard.sequence: discard for discard in hand.discards}
+    claimed_meld_sequences: set[int] = set()
+    for player_hand in hand.player_hands:
+        for meld in player_hand.melds:
+            if meld.discard_sequence is None:
+                continue
+            discard = discards_by_sequence.get(meld.discard_sequence)
+            if discard is None:
+                raise ValueError("claimed meld provenance references an unknown discard")
+            if meld.discard_sequence in claimed_meld_sequences:
+                raise ValueError(
+                    "a ledger discard cannot provide more than one claimed meld"
+                )
+            if (
+                discard.claim_kind is not meld_kind_to_claim_kind[meld.kind]
+                or discard.claimed_by_seat_id != player_hand.seat_id
+                or discard.discarded_by_seat_id != meld.claimed_from_seat_id
+                or discard.tile not in meld.tiles
+            ):
+                raise ValueError(
+                    "claimed meld provenance does not match its ledger discard"
+                )
+            claimed_meld_sequences.add(meld.discard_sequence)
+    for discard in hand.discards:
+        held = held_by_id.get(discard.tile.tile_id)
+        if discard.claim_kind in meld_claim_kinds:
+            if (
+                discard.sequence not in claimed_meld_sequences
+                or held is None
+                or held[1] != discard.claimed_by_seat_id
+                or held[2] != "meld"
+                or held[0] != discard.tile
+            ):
+                raise ValueError(
+                    "a meld-claimed discard must be the same physical tile in "
+                    "the claimant's meld"
+                )
+        elif held is not None:
+            raise ValueError(
+                "only a Chow, Pong, or Kong claimed discard may also appear "
+                "in a player's held tiles"
+            )
 
 
 class SeatBalance(GameModel):

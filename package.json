@@ -7,6 +7,13 @@
   },
   "scripts": {
     "dev:web": "npm --prefix apps/web run dev",
-    "build:web": "npm --prefix apps/web run build"
+    "build:api": "npm --prefix apps/api run build",
+    "build:web": "npm --prefix apps/web run build",
+    "test:api": "npm --prefix apps/api run test:python",
+    "test:web": "npm --prefix apps/web test",
+    "test:pyodide": "npm --prefix apps/api run test:pyodide",
+    "test:worker": "npm --prefix apps/api run test:worker",
+    "test": "npm run test:api && npm run test:web && npm run test:pyodide && npm run test:worker",
+    "check": "npm run test:api && npm run test:web && npm run build:web && npm run test:pyodide && npm run test:worker && npm run build:api"
   }
 }

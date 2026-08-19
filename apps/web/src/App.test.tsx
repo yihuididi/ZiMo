@@ -216,6 +216,14 @@ describe("Milestone 2 room UI", () => {
     });
   });
 
+  it("does not focus the home heading on initial page load", () => {
+    render(<App />);
+
+    const heading = screen.getByRole("heading", { name: "Gather your table." });
+    expect(heading).not.toHaveFocus();
+    expect(heading).not.toHaveAttribute("tabindex");
+  });
+
   it("creates a host session scoped to the returned room", async () => {
     vi.mocked(createRoom).mockResolvedValue({
       roomId: "room-a",
@@ -232,7 +240,7 @@ describe("Milestone 2 room UI", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create private room" }));
 
     await waitFor(() => expect(location.pathname).toBe("/rooms/room-a"));
-    expect(createRoom).toHaveBeenCalledWith("Mei");
+    expect(createRoom).toHaveBeenCalledWith("Mei", expect.any(AbortSignal));
     expect(loadRoomSession("room-a")).toEqual({
       version: 1,
       roomId: "room-a",
@@ -265,6 +273,78 @@ describe("Milestone 2 room UI", () => {
     ).toBeVisible();
     expect(location.pathname).toBe("/");
     expect(loadRoomSession("room-a")).toBeNull();
+  });
+
+  it("keeps invite navigation disabled while room creation is pending", async () => {
+    let resolveCreate!: (value: Awaited<ReturnType<typeof createRoom>>) => void;
+    vi.mocked(createRoom).mockReturnValue(
+      new Promise((resolve) => {
+        resolveCreate = resolve;
+      }),
+    );
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText("Already invited?"), {
+      target: {
+        value: "https://mahjong.example/rooms/other-room#invite=invite-other",
+      },
+    });
+    fireEvent.change(screen.getByLabelText("Your display name"), {
+      target: { value: "Mei" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create private room" }));
+
+    expect(screen.getByRole("button", { name: "Creating room…" })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    expect(screen.getByLabelText("Already invited?")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Open" })).toBeDisabled();
+    fireEvent.submit(screen.getByLabelText("Already invited?").closest("form")!);
+    expect(location.pathname).toBe("/");
+
+    await act(async () => {
+      resolveCreate({
+        roomId: "room-a",
+        playerId: "player-host",
+        playerToken: "host-secret",
+        inviteToken: "invite-secret",
+        view: roomView(),
+      });
+    });
+    await waitFor(() => expect(location.pathname).toBe("/rooms/room-a"));
+  });
+
+  it("ignores a create response after the home page unmounts", async () => {
+    let resolveCreate!: (value: Awaited<ReturnType<typeof createRoom>>) => void;
+    vi.mocked(createRoom).mockReturnValue(
+      new Promise((resolve) => {
+        resolveCreate = resolve;
+      }),
+    );
+    const result = render(<App />);
+
+    fireEvent.change(screen.getByLabelText("Your display name"), {
+      target: { value: "Mei" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create private room" }));
+    const signal = vi.mocked(createRoom).mock.calls[0][1];
+
+    result.unmount();
+    expect(signal?.aborted).toBe(true);
+    await act(async () => {
+      resolveCreate({
+        roomId: "room-late",
+        playerId: "player-host",
+        playerToken: "host-secret",
+        inviteToken: "invite-secret",
+        view: roomView({ roomId: "room-late" }),
+      });
+      await Promise.resolve();
+    });
+
+    expect(location.pathname).toBe("/");
+    expect(loadRoomSession("room-late")).toBeNull();
   });
 
   it("offers a saved room after tab storage is cleared and rejoins the same player", () => {
@@ -354,15 +434,22 @@ describe("Milestone 2 room UI", () => {
     openHostLobby();
     const seats = screen.getAllByRole("listitem");
     expect(seats.map((seat) => seat.querySelector("strong")?.textContent)).toEqual([
-      "Mei",
-      "Open seat",
-      "Bot Bamboo",
-      "Open seat",
+      "Seat 1: Mei",
+      "Seat 2: Open seat",
+      "Seat 3: Bot Bamboo",
+      "Seat 4: Open seat",
     ]);
     expect(screen.getByText("You · Host")).toBeVisible();
     expect(screen.getByText("Bot", { exact: true })).toBeVisible();
     expect(screen.getByText("Read only")).toBeVisible();
     expect(screen.getByText("1–5 fan")).toBeVisible();
+  });
+
+  it("titles the room and focuses its heading when the lobby opens", () => {
+    openHostLobby();
+
+    expect(document.title).toBe("Room lobby · ZiMo Mahjong");
+    expect(screen.getByRole("heading", { name: "Room lobby" })).toHaveFocus();
   });
 
   it("shows a server-anchored removal countdown for a disconnected player", () => {
@@ -371,8 +458,11 @@ describe("Milestone 2 room UI", () => {
 
     const tag = screen.getByText("Disconnected");
     expect(tag).toBeVisible();
-    expect(tag.closest('[role="status"]')).toHaveAttribute("aria-live", "polite");
-    expect(screen.getByText("Removing in 5:00")).toBeVisible();
+    expect(tag).toHaveAttribute("role", "status");
+    expect(tag).not.toHaveAttribute("aria-live");
+    const countdown = screen.getByText("Removing in 5:00");
+    expect(countdown).toBeVisible();
+    expect(countdown.closest('[role="status"]')).toBeNull();
 
     act(() => vi.advanceTimersByTime(1_000));
     expect(screen.getByText("Removing in 4:59")).toBeVisible();
@@ -489,6 +579,8 @@ describe("Milestone 2 room UI", () => {
         "http://localhost:3000/rooms/room-a#invite=invite-promoted-host",
       ),
     );
+    const copyAnnouncement = screen.getByText("Invitation link copied.");
+    expect(copyAnnouncement).toHaveAttribute("role", "status");
   });
 
   it("purges a former host invitation and ignores a delayed rotation result", async () => {
@@ -733,18 +825,48 @@ describe("Milestone 2 room UI", () => {
     openHostLobby();
 
     fireEvent.click(screen.getByRole("button", { name: "Ready" }));
-    expect(await screen.findByRole("button", { name: "Retry safely" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Working…" })).toBeDisabled();
+    expect(
+      await screen.findByRole("button", { name: "Retry Ready safely" }),
+    ).toBeVisible();
+    const retryingAction = screen.getByRole("button", { name: "Ready" });
+    expect(retryingAction).toBeDisabled();
+    expect(retryingAction).not.toHaveAttribute("aria-busy");
     expect(
       screen.getByRole("button", { name: "Create New Invitation Link" }),
     ).toBeEnabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Retry safely" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retry Ready safely" }));
     await waitFor(() => expect(submitCommand).toHaveBeenCalledTimes(2));
     expect(vi.mocked(submitCommand).mock.calls[1][2]).toEqual(
       vi.mocked(submitCommand).mock.calls[0][2],
     );
     expect(await screen.findByText("Revision 8", { exact: false })).toBeVisible();
+  });
+
+  it("marks only a submitting descriptor as busy", async () => {
+    let resolveCommand!: (
+      value: Awaited<ReturnType<typeof submitCommand>>,
+    ) => void;
+    vi.mocked(submitCommand).mockReturnValue(
+      new Promise((resolve) => {
+        resolveCommand = resolve;
+      }),
+    );
+    openHostLobby();
+
+    fireEvent.click(screen.getByRole("button", { name: "Ready" }));
+    const working = screen.getByRole("button", { name: "Working…" });
+    expect(working).toBeDisabled();
+    expect(working).toHaveAttribute("aria-busy", "true");
+    expect(
+      screen.getByRole("button", { name: "Create New Invitation Link" }),
+    ).toBeEnabled();
+
+    await act(async () => {
+      resolveCommand({ type: "view", view: roomView({ revision: 8 }) });
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("button", { name: "Ready" })).toBeEnabled();
   });
 
   it("retries an ambiguous gateway failure with the same UUID", async () => {
@@ -759,7 +881,81 @@ describe("Milestone 2 room UI", () => {
     openHostLobby();
 
     fireEvent.click(screen.getByRole("button", { name: "Ready" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Retry safely" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Retry Ready safely" }),
+    );
+
+    await waitFor(() => expect(submitCommand).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(submitCommand).mock.calls[1][2]).toEqual(
+      vi.mocked(submitCommand).mock.calls[0][2],
+    );
+  });
+
+  it("keeps an ambiguous action recoverable through clipboard and another command", async () => {
+    vi.mocked(crypto.randomUUID)
+      .mockReturnValueOnce("00000000-0000-4000-8000-000000000001")
+      .mockReturnValueOnce("00000000-0000-4000-8000-000000000002");
+    vi.mocked(submitCommand)
+      .mockRejectedValueOnce(new TypeError("Connection reset"))
+      .mockResolvedValueOnce({
+        type: "view",
+        view: roomView({ revision: 8 }),
+      })
+      .mockResolvedValueOnce({
+        type: "view",
+        view: roomView({ revision: 8 }),
+      });
+    openHostLobby();
+
+    fireEvent.click(screen.getByRole("button", { name: "Ready" }));
+    const retryReady = await screen.findByRole("button", {
+      name: "Retry Ready safely",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy invitation link" }));
+    expect(
+      await screen.findByRole("button", { name: "Invitation copied" }),
+    ).toBeVisible();
+    expect(retryReady).toBeVisible();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Create New Invitation Link" }),
+    );
+    expect(await screen.findByText(/Revision 8/)).toBeVisible();
+    expect(retryReady).toBeVisible();
+
+    fireEvent.click(retryReady);
+    await waitFor(() => expect(submitCommand).toHaveBeenCalledTimes(3));
+    expect(vi.mocked(submitCommand).mock.calls[2][2]).toEqual(
+      vi.mocked(submitCommand).mock.calls[0][2],
+    );
+  });
+
+  it("keeps retry available after a socket view removes the descriptor", async () => {
+    vi.mocked(submitCommand)
+      .mockRejectedValueOnce(new TypeError("Connection reset"))
+      .mockResolvedValueOnce({
+        type: "view",
+        view: roomView({ revision: 8 }),
+      });
+    openHostLobby();
+
+    fireEvent.click(screen.getByRole("button", { name: "Ready" }));
+    const retryReady = await screen.findByRole("button", {
+      name: "Retry Ready safely",
+    });
+    emitSocketView(
+      roomView({
+        revision: 8,
+        actions: roomView().actions.filter(
+          (action) => action.presentationSlot === "invitation",
+        ),
+      }),
+    );
+
+    expect(screen.queryByRole("button", { name: "Ready" })).not.toBeInTheDocument();
+    expect(retryReady).toBeVisible();
+    fireEvent.click(retryReady);
 
     await waitFor(() => expect(submitCommand).toHaveBeenCalledTimes(2));
     expect(vi.mocked(submitCommand).mock.calls[1][2]).toEqual(
