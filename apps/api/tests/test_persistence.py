@@ -422,6 +422,49 @@ def test_durable_storage_adapter_uses_synchronous_sql_contract(
     assert repository.load_room() == room_state()
 
 
+def test_schema_create_and_cas_each_use_one_non_nested_transaction(
+    database: sqlite3.Connection,
+) -> None:
+    sqlite_executor = SQLiteSqlExecutor(database)
+
+    class CountingExecutor:
+        def __init__(self) -> None:
+            self.transaction_calls = 0
+            self.depth = 0
+            self.maximum_depth = 0
+
+        def exec(self, statement: str, *bindings: object) -> object:
+            return sqlite_executor.exec(statement, *bindings)
+
+        def transaction(self, callback):  # type: ignore[no-untyped-def]
+            self.transaction_calls += 1
+
+            def observed():  # type: ignore[no-untyped-def]
+                self.depth += 1
+                self.maximum_depth = max(self.maximum_depth, self.depth)
+                try:
+                    return callback()
+                finally:
+                    self.depth -= 1
+
+            return sqlite_executor.transaction(observed)
+
+    executor = CountingExecutor()
+    repository = RoomRepository(executor)
+    repository.initialize_schema(applied_at_ms=900)
+    assert executor.transaction_calls == 1
+
+    initial = room_state()
+    repository.create_room(initial)
+    assert executor.transaction_calls == 2
+
+    revised_data = initial.model_dump()
+    revised_data.update(revision=1, updated_at_ms=1_001)
+    repository.compare_and_swap(0, RoomState.model_validate(revised_data))
+    assert executor.transaction_calls == 3
+    assert executor.maximum_depth == 1
+
+
 def test_presence_is_revision_neutral_generation_bound_and_reconnect_clears_it(
     repository: RoomRepository,
 ) -> None:
