@@ -107,8 +107,17 @@ class RoomCreationAndAuthenticationTests(RoomOrchestratorTestCase):
         self.assertEqual(str(created.view.viewer_player_id), created.player_id)
         self.assertEqual(
             created.view.capabilities,
-            ("multiplayerLobby", "roomEvents", "hibernatingWebSockets"),
+            (
+                "multiplayerLobby",
+                "roomEvents",
+                "hibernatingWebSockets",
+                "drawDiscard",
+                "bonusTiles",
+                "discardWindow",
+            ),
         )
+        self.assertEqual(created.view.ruleset_version, "0.2.0")
+        self.assertEqual(created.view.state_schema_version, 3)
 
         player_row = self.connection.execute(
             "SELECT token_hash FROM players WHERE player_id = ?",
@@ -667,7 +676,7 @@ class RoomCommandTests(RoomOrchestratorTestCase):
         self.assertEqual([str(player.player_id) for player in host_view.players], [created.player_id])
         self.assertIsNone(host_view.seats[1].occupant)
 
-    def test_start_against_bots_commits_one_revision_with_three_events(self) -> None:
+    def test_start_against_bots_sets_up_and_pumps_in_one_revision(self) -> None:
         created = self.create()
         self.service.player_connected(created.player_id, 0)
         start_id = descriptor_id(created.view, "Start Against Bots")
@@ -678,17 +687,16 @@ class RoomCommandTests(RoomOrchestratorTestCase):
         view = result.view  # type: ignore[union-attr]
         self.assertEqual(view.revision, 1)
         self.assertEqual(view.status, RoomStatus.IN_MATCH)
-        self.assertEqual(view.game.status, MatchStatus.PENDING_SETUP)  # type: ignore[union-attr]
-        self.assertIsNone(view.game.dealer_seat_id)  # type: ignore[union-attr]
-        self.assertEqual(view.actions, ())
+        self.assertEqual(view.game.status, MatchStatus.ACTIVE)  # type: ignore[union-attr]
+        self.assertIsNotNone(view.game.dealer_seat_id)  # type: ignore[union-attr]
+        events = self.service.projected_events(created.player_token).events
+        event_types = [event.type for event in events]
         self.assertEqual(
-            [event.type for event in self.service.projected_events(created.player_token).events],
+            event_types[:4],
             ["roomCreated", "botsFilled", "playerReadinessChanged", "matchStarted"],
         )
-        self.assertEqual(
-            [event.revision for event in self.service.projected_events(created.player_token).events],
-            [0, 1, 1, 1],
-        )
+        self.assertIn("handStarted", event_types)
+        self.assertTrue(all(event.revision == 1 for event in events[1:]))
         self.assert_service_error(
             409,
             "roomClosed",

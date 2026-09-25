@@ -8,6 +8,124 @@ export type RoomStatus =
 export type PlayerRole = "HOST" | "MEMBER";
 export type PlayerConnectionStatus = "CONNECTED" | "DISCONNECTED";
 export type Wind = "EAST" | "SOUTH" | "WEST" | "NORTH";
+export type RoomCapability =
+  | "multiplayerLobby"
+  | "roomEvents"
+  | "hibernatingWebSockets"
+  | "drawDiscard"
+  | "bonusTiles"
+  | "discardWindow";
+
+export type TileRank = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+export type BonusNumber = 1 | 2 | 3 | 4;
+export type TileFamily =
+  | "CHARACTERS"
+  | "BAMBOO"
+  | "DOTS"
+  | "WIND"
+  | "DRAGON"
+  | "FLOWER"
+  | "SEASON"
+  | "ANIMAL";
+
+export type TileFace =
+  | {
+      family: "CHARACTERS" | "BAMBOO" | "DOTS";
+      value: TileRank;
+    }
+  | { family: "WIND"; value: Wind }
+  | { family: "DRAGON"; value: "RED" | "GREEN" | "WHITE" }
+  | { family: "FLOWER" | "SEASON"; value: BonusNumber }
+  | {
+      family: "ANIMAL";
+      value: "CAT" | "MOUSE" | "ROOSTER" | "CENTIPEDE";
+    };
+
+export interface PublicTileView {
+  face: TileFace;
+}
+
+export type MeldKind = "CHOW" | "PONG" | "KONG";
+export type ClaimKind = MeldKind | "WIN" | "PASS";
+
+export interface PublicExposedMeldView {
+  visibility: "exposed";
+  kind: MeldKind;
+  tiles: PublicTileView[];
+  claimedFromSeatId: string | null;
+  discardSequence: number | null;
+}
+
+export interface PublicConcealedMeldView {
+  visibility: "concealed";
+  kind: MeldKind;
+  tileCount: number;
+}
+
+export type PublicMeldView =
+  | PublicExposedMeldView
+  | PublicConcealedMeldView;
+
+export interface PublicDiscardView {
+  sequence: number;
+  tile: PublicTileView;
+  discardedBySeatId: string;
+  claimedBySeatId: string | null;
+  claimKind: ClaimKind | null;
+}
+
+export type PhaseType =
+  | "setup"
+  | "awaitingDraw"
+  | "awaitingDiscard"
+  | "discardClaims"
+  | "kongReplacement"
+  | "kongRobbery"
+  | "complete";
+
+export interface PhaseObservation {
+  type: PhaseType;
+  activeSeatId: string | null;
+  windowId: string | null;
+  discardSequence: number | null;
+  declaringSeatId: string | null;
+}
+
+export interface SeatBalance {
+  seatId: string;
+  points: number;
+}
+
+export interface FanAward {
+  name: string;
+  fan: number;
+}
+
+export interface Payment {
+  sequence: number;
+  payerSeatId: string;
+  recipientSeatId: string;
+  amount: number;
+  reason: string;
+}
+
+export interface HandResult {
+  outcome: "WIN" | "TIE" | "ABORTED";
+  winnerSeatId: string | null;
+  providerSeatId: string | null;
+  winSource: "SELF_DRAW" | "DISCARD" | "ROBBED_KONG" | null;
+  fan: number;
+  fanAwards: FanAward[];
+  payments: Payment[];
+  reason: string | null;
+}
+
+export interface MatchResult {
+  finalBalances: SeatBalance[];
+  winningSeatIds: string[];
+  completedAtMs: number;
+  reason: string | null;
+}
 
 export interface GameConfig {
   shooterMode: boolean;
@@ -39,7 +157,12 @@ export interface OpaqueActionDescriptor {
   enabled: boolean;
   tone?: "primary" | "neutral" | "danger" | null;
   disabledReason?: string | null;
-  presentationSlot: "roomActions" | "invitation";
+  presentationSlot:
+    | "roomActions"
+    | "invitation"
+    | "concealedTile"
+    | "drawnTile";
+  presentationIndex?: number | null;
 }
 
 export interface PublicPlayerView {
@@ -68,18 +191,18 @@ interface BaseSeatView {
 
 export interface SelfSeatView extends BaseSeatView {
   view: "self";
-  concealedTiles: unknown[];
-  drawnTile: unknown | null;
-  melds: unknown[];
-  bonusTiles: unknown[];
+  concealedTiles: PublicTileView[];
+  drawnTile: PublicTileView | null;
+  melds: PublicMeldView[];
+  bonusTiles: PublicTileView[];
 }
 
 export interface OpponentSeatView extends BaseSeatView {
   view: "opponent";
   concealedTileCount: number;
   hasDrawnTile: boolean;
-  melds: unknown[];
-  bonusTiles: unknown[];
+  melds: PublicMeldView[];
+  bonusTiles: PublicTileView[];
 }
 
 export type PublicSeatView = SelfSeatView | OpponentSeatView;
@@ -88,13 +211,13 @@ export interface PublicGameView {
   status: "PENDING_SETUP" | "ACTIVE" | "FINISHED";
   prevailingWind: Wind;
   dealerSeatId: string | null;
-  phase: unknown | null;
+  phase: PhaseObservation | null;
   liveWallTileCount: number;
   reserveWallTileCount: number;
-  discards: unknown[];
-  balances: unknown[];
-  result: unknown | null;
-  matchResult: unknown | null;
+  discards: PublicDiscardView[];
+  balances: SeatBalance[];
+  result: HandResult | null;
+  matchResult: MatchResult | null;
 }
 
 export interface PublicRoomView {
@@ -106,7 +229,7 @@ export interface PublicRoomView {
   rulesetId: string;
   rulesetVersion: string;
   stateSchemaVersion: number;
-  capabilities: string[];
+  capabilities: RoomCapability[];
   config: GameConfig;
   viewerPlayerId: string;
   serverTimeMs: number;

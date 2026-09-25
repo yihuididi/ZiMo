@@ -29,6 +29,7 @@ from .errors import (
     UnsupportedSchemaVersionError,
 )
 from .records import (
+    GameplayAuditPayload,
     LobbyAuditPayload,
     PlayerPresenceRecord,
     PlayerRecord,
@@ -61,6 +62,7 @@ from .schema import (
     application_table_names as _application_table_names,
     initialize_schema as _initialize_schema,
     upgrade_room_snapshots_to_v2 as _upgrade_room_snapshots_to_v2,
+    upgrade_room_snapshots_to_v3 as _upgrade_room_snapshots_to_v3,
 )
 from .sql import (
     CloudflareSqlExecutor,
@@ -82,6 +84,7 @@ from .validation import (
     _validate_connected_presence_references,
     _validate_players_against_state,
     _validate_presence_references,
+    _validate_pending_deadline_transition,
     _validate_room_credential_transition,
     _validate_security_references,
     _validate_stored_event_history,
@@ -114,6 +117,11 @@ class RoomRepository:
         """Rewrite v1 room JSON canonically while preserving history."""
 
         _upgrade_room_snapshots_to_v2(self._executor)
+
+    def _upgrade_room_snapshots_to_v3(self) -> None:
+        """Add persisted deadline metadata without changing ruleset/revision."""
+
+        _upgrade_room_snapshots_to_v3(self._executor)
 
     def _application_table_names(self) -> set[str]:
         return _application_table_names(self._executor)
@@ -261,6 +269,7 @@ class RoomRepository:
                 )
             if record.updated_at_ms < current.updated_at_ms:
                 raise ValueError("updated_at_ms cannot move backwards across commits")
+            _validate_pending_deadline_transition(current.state, state)
 
             existing_players = self._load_players()
             _validate_players_against_state(
@@ -1226,6 +1235,7 @@ class RoomRepository:
 __all__ = [
     "CloudflareSqlExecutor",
     "CorruptRoomStateError",
+    "GameplayAuditPayload",
     "PersistenceError",
     "LobbyAuditPayload",
     "PlayerProjectionError",

@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 
 from .model import RoomState
+from .rules import rules_for_version
 
 
 def serialize_room_state(state: RoomState) -> str:
+    rules_for_version(state.ruleset_version).validate_snapshot(state)
     return state.canonical_json()
 
 
@@ -31,7 +33,9 @@ def deserialize_room_state(snapshot_json: str | bytes) -> RoomState:
         snapshot_json = json.dumps(
             value, ensure_ascii=False, separators=(",", ":"), sort_keys=True
         )
-    return RoomState.model_validate_json(snapshot_json, strict=True)
+    state = RoomState.model_validate_json(snapshot_json, strict=True)
+    rules_for_version(state.ruleset_version).validate_snapshot(state)
+    return state
 
 
 def canonicalize_room_snapshot(snapshot_json: str | bytes) -> str:

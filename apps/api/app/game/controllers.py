@@ -6,8 +6,8 @@ from collections.abc import Iterable, Mapping
 from typing import Protocol
 
 from .actions import DomainAction
-from .model import PolicyId
-from .observation import PlayerObservation
+from .model import AutomatedSeatController, PolicyId, RoomState, SeatId
+from .observation import PlayerObservation, build_seat_observation
 from .runtime import RandomSource
 
 
@@ -67,3 +67,22 @@ class StaticAutomatedPolicySelector:
             raise UnknownAutomatedPolicyError(
                 f"unsupported automated policy: {policy_id}"
             ) from exc
+
+
+def choose_automated_action(
+    room: RoomState,
+    seat_id: SeatId,
+    legal_actions: tuple[DomainAction, ...],
+    rng: RandomSource,
+    *,
+    selector: AutomatedPolicySelector | None = None,
+) -> DomainAction:
+    """Route one automated choice through only its seat observation and actions."""
+
+    seat = next((value for value in room.seats if value.seat_id == seat_id), None)
+    if seat is None or not isinstance(seat.controller, AutomatedSeatController):
+        raise ValueError("seat is not controlled by an automated policy")
+    policies = StaticAutomatedPolicySelector() if selector is None else selector
+    policy = policies.select(seat.controller.policy_id)
+    observation = build_seat_observation(room, seat_id)
+    return policy.choose_action(observation, legal_actions, rng)

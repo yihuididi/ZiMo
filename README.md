@@ -1,10 +1,11 @@
 # ZiMo Mahjong
 
-Milestone 2 of a server-authoritative, real-time multiplayer Mahjong application.
-It provides private four-seat rooms, bearer-authenticated lobby sessions, bots,
-readiness and host controls, revisioned commands, public room events, and
-hibernating WebSocket updates. Matches stop at a frozen `PENDING_SETUP` shell;
-wall generation, dealing, turns, claims, and scoring begin in later milestones.
+Milestone 3 of a server-authoritative, real-time multiplayer Mahjong application.
+It provides private four-seat rooms, bearer-authenticated sessions, mixed human
+and bot tables, revisioned opaque commands, durable three-second discard windows,
+and hibernating WebSocket updates. New rooms play a one-hand draw/discard preview;
+claims, melds, wins, scoring, payments, settings, and additional hands remain
+explicitly unavailable.
 
 ## Architecture
 
@@ -18,7 +19,7 @@ FastAPI backend (Cloudflare Python Worker)
        │
        └────► GAME_ROOM Durable Object ◄──── hibernating WebSockets
                     │
-                    ├──► pure lobby transitions and room orchestrator
+                    ├──► pure lobby/game transitions and room orchestrator
                     ├──► SQLite snapshot repository
                     └──► pure CPython game package
 ```
@@ -96,6 +97,13 @@ from the same saved browser session cancels the removal. If the deadline expires
 the server revokes that player and opens their seat. Started and finished rooms
 retain roles, readiness, and disconnected seats without a removal deadline.
 
+New rooms use Singapore preview ruleset `0.2.0`. Mandatory draws and bonus
+replacements are automatic; a human submits only the current opaque discard
+action ID. Every discard opens a persisted three-second resolution window, while
+an ordinary disconnected human turn waits indefinitely and is restored through
+an authenticated fetch or reconnect. Rooms created under legacy ruleset `0.1.0`
+remain lobby-only.
+
 ## Tests
 
 Run the CPython domain and repository suite:
@@ -153,8 +161,10 @@ mahjong-web: apps/web/*
 mahjong-api: apps/api/*
 ```
 
-After both Cloudflare builds finish, create a room, join it from a second browser
-session, and verify a lobby update arrives without refreshing the page.
+After both Cloudflare builds finish, create a room, start against bots, and verify
+the table renders on desktop and mobile. Discard a tile, confirm the countdown
+reaches `Resolving…` without a client-side transition, and verify the next
+authoritative table update arrives without refreshing the page.
 
 ## Environment variables
 
@@ -179,7 +189,7 @@ Never commit credentials or expose a Supabase service-role key to the frontend.
 
 Per the current project override, the existing Supabase initialization,
 configuration, dependencies, secrets declarations, and CLI project are retained.
-Supabase remains non-authoritative and unused by the Milestone 2 domain and
+Supabase remains non-authoritative and unused by the Milestone 3 domain and
 persistence foundation. `supabase/config.toml` establishes only the local CLI
 project boundary; no Supabase tables, migrations, users, authentication flows, or
 database queries are introduced by this milestone.

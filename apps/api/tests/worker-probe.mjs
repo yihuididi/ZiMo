@@ -105,6 +105,62 @@ export default {
       }
       return jsonTextResponse(await stub.authenticated_view(body.playerToken));
     }
+    if (request.method === "POST" && pathname === "/test/room/connect") {
+      const body = await exactJsonBody(request, ["playerToken"]);
+      if (body === null || typeof body.playerToken !== "string") {
+        return jsonTextResponse('{"error":"invalid request"}', 400);
+      }
+      return jsonTextResponse(await stub.test_connect_player(body.playerToken));
+    }
+    if (request.method === "POST" && pathname === "/test/room/command") {
+      const body = await exactJsonBody(request, [
+        "actionId",
+        "commandId",
+        "expectedRevision",
+        "playerToken",
+      ]);
+      if (
+        body === null ||
+        typeof body.playerToken !== "string" ||
+        typeof body.commandId !== "string" ||
+        !Number.isSafeInteger(body.expectedRevision) ||
+        body.expectedRevision < 0 ||
+        typeof body.actionId !== "string"
+      ) {
+        return jsonTextResponse('{"error":"invalid request"}', 400);
+      }
+      return jsonTextResponse(
+        await stub.execute_command(
+          body.playerToken,
+          body.commandId,
+          body.expectedRevision,
+          body.actionId,
+        ),
+      );
+    }
+    if (
+      request.method === "POST" &&
+      pathname === "/test/room/gameplay-alarm-boundary"
+    ) {
+      const body = await exactJsonBody(request, [
+        "deadlineMs",
+        "playerToken",
+      ]);
+      if (
+        body === null ||
+        typeof body.playerToken !== "string" ||
+        !Number.isSafeInteger(body.deadlineMs) ||
+        body.deadlineMs <= 0
+      ) {
+        return jsonTextResponse('{"error":"invalid request"}', 400);
+      }
+      return jsonTextResponse(
+        await stub.test_gameplay_alarm_boundary(
+          body.playerToken,
+          body.deadlineMs,
+        ),
+      );
+    }
     if (request.method === "POST" && pathname === "/test/room/events") {
       const body = await exactJsonBody(request, [
         "afterSequence",

@@ -30,6 +30,7 @@ def observation() -> PlayerObservation:
         ruleset_version="0.1.0",
         state_schema_version=1,
         config=GameConfig(),
+        viewer_seat_id=SeatId("seat-0"),
         viewer_player_id=PlayerId("player-1"),
         seats=(),
     )

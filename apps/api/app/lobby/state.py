@@ -9,6 +9,8 @@ if "." in (__package__ or ""):
     from ..game import (
         ExternalSeatController,
         GameConfig,
+        MILESTONE_3_RULESET_VERSION,
+        MILESTONE_3_STATE_SCHEMA_VERSION,
         MatchState,
         PlayerId,
         PlayerRole,
@@ -24,6 +26,8 @@ else:  # pragma: no cover - Pyodide Worker module loading
     from game import (
         ExternalSeatController,
         GameConfig,
+        MILESTONE_3_RULESET_VERSION,
+        MILESTONE_3_STATE_SCHEMA_VERSION,
         MatchState,
         PlayerId,
         PlayerRole,
@@ -91,7 +95,8 @@ def create_lobby_room(
     )
     return RoomState(
         room_id=room_id,
-        state_schema_version=2,
+        ruleset_version=MILESTONE_3_RULESET_VERSION,
+        state_schema_version=MILESTONE_3_STATE_SCHEMA_VERSION,
         revision=0,
         status=RoomStatus.WAITING_FOR_PLAYERS,
         seats=tuple(seats),

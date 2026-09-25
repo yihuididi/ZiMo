@@ -45,6 +45,7 @@ from app.game import (
 )
 from app.persistence import (
     CorruptRoomStateError,
+    GameplayAuditPayload,
     PlayerProjectionError,
     PlayerRecord,
     PlayerPresenceRecord,
@@ -83,6 +84,7 @@ PRIVATE_SENTINEL = "PRIVATE-CONCEALED-SENTINEL"
 def room_state(*, revision: int = 0, updated_at_ms: int = 1_000) -> RoomState:
     return RoomState(
         room_id=RoomId("room-persistence-test"),
+        state_schema_version=3,
         revision=revision,
         seats=standard_seats(),
         created_at_ms=1_000,
@@ -113,6 +115,7 @@ def player_room_state(
     )
     return RoomState(
         room_id=RoomId("room-persistence-test"),
+        state_schema_version=3,
         revision=revision,
         status=RoomStatus.CREATED,
         seats=tuple(seats),
@@ -297,6 +300,7 @@ def rich_room_state() -> RoomState:
     )
     return RoomState(
         room_id=RoomId("room-persistence-test"),
+        state_schema_version=3,
         status=RoomStatus.IN_MATCH,
         seats=seats,
         players=(player,),
@@ -326,6 +330,19 @@ def scalar(connection: sqlite3.Connection, statement: str) -> object:
     return row[0]
 
 
+def downgrade_stored_snapshot_to_v2(connection: sqlite3.Connection) -> None:
+    """Simulate a canonical row written before deadline migration 4."""
+
+    value = json.loads(str(scalar(connection, "SELECT snapshot_json FROM room_state")))
+    value["stateSchemaVersion"] = 2
+    value.pop("pendingDeadline", None)
+    snapshot = json.dumps(value, separators=(",", ":"), sort_keys=True)
+    connection.execute(
+        "UPDATE room_state SET snapshot_json = ?, state_schema_version = 2",
+        (snapshot,),
+    )
+
+
 def test_schema_has_exact_tables_and_migration_is_idempotent(
     database: sqlite3.Connection,
 ) -> None:
@@ -349,6 +366,7 @@ def test_schema_has_exact_tables_and_migration_is_idempotent(
         (1, "milestone_1_foundation", 900),
         (2, "milestone_2_room_security", 900),
         (3, "milestone_2_player_presence", 900),
+        (4, "milestone_3_gameplay_deadline", 900),
     ]
 
 
@@ -369,7 +387,7 @@ def test_schema_ignores_cloudflare_runtime_internal_tables(
     ("tamper_sql", "message"),
     (
         (
-            "UPDATE _sql_schema_migrations SET id = 4 WHERE id = 3",
+            "UPDATE _sql_schema_migrations SET id = 5 WHERE id = 4",
             "migration history",
         ),
         (
@@ -565,7 +583,7 @@ def test_presence_mutations_share_room_commit_and_roll_back_atomically(
     assert repository.presence_version() == 2
 
 
-def test_v2_to_v3_migration_seeds_active_players_with_a_grace_period(
+def test_v2_to_v4_migrations_seed_presence_and_upgrade_snapshot(
     database: sqlite3.Connection,
 ) -> None:
     repository = RoomRepository.from_sqlite(database)
@@ -574,9 +592,10 @@ def test_v2_to_v3_migration_seeds_active_players_with_a_grace_period(
         player_room_state(),
         players=(player_record(),),
     )
+    downgrade_stored_snapshot_to_v2(database)
     database.execute("DROP TABLE player_presence")
     database.execute("DROP TABLE room_presence")
-    database.execute("DELETE FROM _sql_schema_migrations WHERE id = 3")
+    database.execute("DELETE FROM _sql_schema_migrations WHERE id >= 3")
 
     repository.initialize_schema(applied_at_ms=5_000)
 
@@ -590,9 +609,14 @@ def test_v2_to_v3_migration_seeds_active_players_with_a_grace_period(
     )
     assert repository.presence_version() == 1
     assert repository.next_presence_alarm_ms() == 305_000
+    migrated = repository.load_room()
+    assert migrated is not None
+    assert migrated.ruleset_version == "0.1.0"
+    assert migrated.state_schema_version == 3
+    assert migrated.pending_deadline is None
 
 
-def test_v2_to_v3_migration_freezes_presence_for_finished_rooms(
+def test_v2_to_v4_migrations_freeze_finished_presence_and_preserve_revision(
     database: sqlite3.Connection,
 ) -> None:
     repository = RoomRepository.from_sqlite(database)
@@ -601,9 +625,10 @@ def test_v2_to_v3_migration_freezes_presence_for_finished_rooms(
     data["status"] = RoomStatus.FINISHED
     finished = RoomState.model_validate(data)
     repository.create_room(finished, players=(player_record(),))
+    downgrade_stored_snapshot_to_v2(database)
     database.execute("DROP TABLE player_presence")
     database.execute("DROP TABLE room_presence")
-    database.execute("DELETE FROM _sql_schema_migrations WHERE id = 3")
+    database.execute("DELETE FROM _sql_schema_migrations WHERE id >= 3")
 
     repository.initialize_schema(applied_at_ms=5_000)
 
@@ -616,6 +641,38 @@ def test_v2_to_v3_migration_freezes_presence_for_finished_rooms(
         ),
     )
     assert repository.next_presence_alarm_ms() is None
+    migrated = repository.load_room()
+    assert migrated is not None
+    assert migrated.revision == finished.revision
+    assert migrated.ruleset_version == "0.1.0"
+    assert migrated.state_schema_version == 3
+
+
+def test_migration_four_rewrites_schema_v1_without_changing_ruleset_or_revision(
+    database: sqlite3.Connection,
+) -> None:
+    repository = RoomRepository.from_sqlite(database)
+    repository.initialize_schema(applied_at_ms=900)
+    original = room_state(revision=7, updated_at_ms=1_007)
+    repository.create_room(original)
+
+    value = json.loads(str(scalar(database, "SELECT snapshot_json FROM room_state")))
+    value["stateSchemaVersion"] = 1
+    value.pop("pendingDeadline", None)
+    database.execute(
+        "UPDATE room_state SET snapshot_json = ?, state_schema_version = 1",
+        (json.dumps(value, separators=(",", ":"), sort_keys=True),),
+    )
+    database.execute("DELETE FROM _sql_schema_migrations WHERE id = 4")
+
+    repository.initialize_schema(applied_at_ms=5_000)
+
+    migrated = repository.load_room()
+    assert migrated is not None
+    assert migrated.ruleset_version == original.ruleset_version == "0.1.0"
+    assert migrated.revision == original.revision == 7
+    assert migrated.state_schema_version == 3
+    assert migrated.pending_deadline is None
 
 
 def test_room_commit_cleans_revoked_presence_and_freezes_match_deadlines(
@@ -700,7 +757,7 @@ def test_create_and_load_round_trip_exact_canonical_state(
     ).fetchone()
     assert row is not None
     assert row[0] == initial.canonical_json()
-    assert row[1:5] == ("singapore", "0.1.0", 2, 0)
+    assert row[1:5] == ("singapore", "0.1.0", 3, 0)
     assert json.loads(row[5]) == initial.config.canonical_data()
     assert row[6:] == (1_000, 1_000)
     assert loaded.match is not None
@@ -862,6 +919,65 @@ def test_audit_boundary_rejects_raw_domain_and_secret_bearing_payloads(
 
     assert scalar(database, "SELECT COUNT(*) FROM room_state") == 0
     assert scalar(database, "SELECT COUNT(*) FROM events") == 0
+
+
+def test_gameplay_audit_allowlist_keeps_only_public_scalar_facts() -> None:
+    safe = GameplayAuditPayload(
+        event_type="tileDiscarded",
+        room_id="room-persistence-test",
+        revision=2,
+        details_json=json.dumps(
+            {
+                "discardSequence": 1,
+                "seatId": "seat-0",
+                "tileFamily": "CHARACTERS",
+                "tileValue": 9,
+            }
+        ),
+    )
+    assert safe.details == {
+        "discardSequence": 1,
+        "seatId": "seat-0",
+        "tileFamily": "CHARACTERS",
+        "tileValue": 9,
+    }
+
+    with pytest.raises(ValueError, match="not allow-listed"):
+        GameplayAuditPayload(
+            event_type="tileDrawn",
+            room_id="room-persistence-test",
+            revision=2,
+        )
+    with pytest.raises(ValueError, match="private engine state"):
+        GameplayAuditPayload(
+            event_type="tileDiscarded",
+            room_id="room-persistence-test",
+            revision=2,
+            details_json=json.dumps(
+                {
+                    "discardSequence": 1,
+                    "seatId": "seat-0",
+                    "tileFamily": "CHARACTERS",
+                    "tileValue": 9,
+                    "tileId": PRIVATE_SENTINEL,
+                }
+            ),
+        )
+    with pytest.raises(ValueError, match="allow-list"):
+        GameplayAuditPayload(
+            event_type="bonusExposed",
+            room_id="room-persistence-test",
+            revision=2,
+            details_json=json.dumps(
+                {
+                    "initial": True,
+                    "seatId": "seat-0",
+                    "tileFamily": "FLOWER",
+                    "tileValue": 1,
+                    "extra": "future-private-field",
+                }
+            ),
+        )
 
 
 def test_list_events_validates_canonical_room_revision_and_chronology(
@@ -1171,7 +1287,7 @@ def test_cas_freezes_metadata_and_requires_monotonic_timestamps(
         "room_id": RoomId("other-room"),
         "ruleset_id": "other-rules",
         "ruleset_version": "99.0.0",
-        "state_schema_version": 3,
+        "state_schema_version": 2,
         "created_at_ms": 999,
     }
     for field, value in mutations.items():

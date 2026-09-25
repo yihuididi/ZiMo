@@ -21,11 +21,12 @@ from .sql import (
 
 _ROOM_STATE_SINGLETON_ID = 1
 _DISCONNECT_GRACE_MS = 300_000
-_LATEST_SCHEMA_VERSION = 3
+_LATEST_SCHEMA_VERSION = 4
 _MIGRATION_NAMES = {
     1: "milestone_1_foundation",
     2: "milestone_2_room_security",
     3: "milestone_2_player_presence",
+    4: "milestone_3_gameplay_deadline",
 }
 _REQUIRED_APPLICATION_TABLES = {
     "_sql_schema_migrations",
@@ -224,7 +225,6 @@ def initialize_schema(
         if len(history) < 2:
             for statement in _MIGRATION_TWO_STATEMENTS:
                 executor.exec(statement)
-            upgrade_room_snapshots_to_v2(executor)
             executor.exec(
                 """
                 INSERT INTO _sql_schema_migrations (id, name, applied_at_ms)
@@ -279,6 +279,20 @@ def initialize_schema(
                 _MIGRATION_NAMES[3],
                 timestamp,
             )
+            history.append((3, _MIGRATION_NAMES[3]))
+
+        if len(history) < 4:
+            upgrade_room_snapshots_to_v3(executor)
+            executor.exec(
+                """
+                INSERT INTO _sql_schema_migrations (id, name, applied_at_ms)
+                VALUES (?, ?, ?)
+                """,
+                4,
+                _MIGRATION_NAMES[4],
+                timestamp,
+            )
+            history.append((4, _MIGRATION_NAMES[4]))
 
         actual_tables = application_table_names(executor)
         if actual_tables != _REQUIRED_APPLICATION_TABLES:
@@ -336,6 +350,58 @@ def upgrade_room_snapshots_to_v2(executor: SynchronousSqlExecutor) -> None:
             """,
             snapshot_json,
             int(_row_value(row, "singleton_id")),
+        )
+
+
+def upgrade_room_snapshots_to_v3(executor: SynchronousSqlExecutor) -> None:
+    """Add canonical persisted deadline metadata to legacy room snapshots."""
+
+    rows = _rows(
+        executor.exec(
+            """
+            SELECT singleton_id, state_schema_version, snapshot_json
+            FROM room_state
+            WHERE state_schema_version IN (1, 2)
+            """
+        )
+    )
+    for row in rows:
+        stored_version = int(_row_value(row, "state_schema_version"))
+        try:
+            value = json.loads(str(_row_value(row, "snapshot_json")))
+            marker = value.get("stateSchemaVersion") if type(value) is dict else None
+            if type(value) is not dict or type(marker) is not int:
+                raise ValueError("schema metadata is missing")
+            if marker != stored_version or marker not in {1, 2}:
+                raise ValueError("schema metadata is inconsistent")
+            match = value.get("match")
+            if marker == 1 and isinstance(match, dict) and match.get("status") == "PENDING_SETUP":
+                raise ValueError("schema-v1 snapshot contains a v2-only match")
+            value["stateSchemaVersion"] = 3
+            value["pendingDeadline"] = None
+            state = RoomState.model_validate_json(
+                json.dumps(
+                    value,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                ),
+                strict=True,
+            )
+            snapshot_json = state.canonical_json()
+        except Exception as exc:
+            raise UnsupportedSchemaVersionError(
+                "cannot upgrade a stored schema-v1/v2 room snapshot"
+            ) from exc
+        executor.exec(
+            """
+            UPDATE room_state
+            SET snapshot_json = ?, state_schema_version = 3
+            WHERE singleton_id = ? AND state_schema_version = ?
+            """,
+            snapshot_json,
+            int(_row_value(row, "singleton_id")),
+            stored_version,
         )
 
 

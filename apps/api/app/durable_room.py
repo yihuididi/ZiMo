@@ -54,16 +54,27 @@ class GameRoom(DurableObject):
 
         async def initialize_schema() -> None:
             repository.initialize_schema()
-            _live, presence_changed = self._reconcile_open_socket_presence()
-            await self._reschedule_presence_alarm()
+            existing_alarm = await self.ctx.storage.getAlarm()
+            now_ms = self._orchestrator.sample_time_ms()
+            _live, presence_changed = self._reconcile_open_socket_presence(
+                now_ms=now_ms
+            )
+            # A constructor also runs immediately before an alarm handler. Do
+            # not overwrite that waking alarm; the handler will reconcile it.
+            if existing_alarm is None:
+                await self._reschedule_room_alarm()
             if presence_changed:
-                self._broadcast_views()
+                self._broadcast_views(now_ms=now_ms)
 
         self.ctx.blockConcurrencyWhile(initialize_schema)
 
     async def initialize_room(self, snapshot_json: str) -> str:
         """Persist a canonical snapshot through the retained internal RPC."""
+        generation = self._orchestrator.commit_generation
         state = self._orchestrator.initialize_room(snapshot_json)
+        if self._orchestrator.commit_generation != generation:
+            await self._reschedule_room_alarm()
+            self._broadcast_views()
         return state.canonical_json()
 
     async def load_room(self) -> str | None:
@@ -84,27 +95,9 @@ class GameRoom(DurableObject):
     def _room_rpc(
         self,
         operation: Any,
-        *,
-        broadcast_after_change: bool = False,
     ) -> str:
-        commit_generation = self._orchestrator.commit_generation
         try:
             value = operation()
-            if (
-                broadcast_after_change
-                and self._orchestrator.commit_generation != commit_generation
-            ):
-                try:
-                    self._broadcast_views()
-                except Exception as exc:
-                    log_unexpected(
-                        "room.broadcast",
-                        exc,
-                        revision=self._cached_revision(),
-                    )
-                    # A committed REST mutation remains authoritative even if
-                    # a best-effort push fails; clients refetch on reconnect.
-                    pass
         except Exception as exc:
             failure = rpc_failure(exc)
             if failure is None:
@@ -126,33 +119,51 @@ class GameRoom(DurableObject):
             return failure
         return rpc_success(value)
 
-    async def create_room(self, room_id: str, display_name: str) -> str:
-        commit_generation = self._orchestrator.commit_generation
-        result = self._room_rpc(
-            lambda: self._orchestrator.create_room(room_id, display_name),
-            broadcast_after_change=True,
-        )
-        if self._orchestrator.commit_generation != commit_generation:
-            await self._reschedule_presence_alarm()
+    async def _run_room_operation(
+        self,
+        operation: Any,
+        *,
+        broadcast_after_change: bool = True,
+    ) -> str:
+        """Run, then schedule and push every commit before returning."""
+
+        generation = self._orchestrator.commit_generation
+        result = self._room_rpc(operation)
+        if self._orchestrator.commit_generation != generation:
+            await self._reschedule_room_alarm()
+            if broadcast_after_change:
+                try:
+                    self._broadcast_views(
+                        now_ms=self._orchestrator.last_sampled_time_ms
+                    )
+                except Exception as exc:
+                    log_unexpected(
+                        "room.broadcast",
+                        exc,
+                        revision=self._cached_revision(),
+                    )
+                    # The canonical commit remains authoritative; sockets
+                    # refetch their individualized projection on reconnect.
+                    pass
         return result
+
+    async def create_room(self, room_id: str, display_name: str) -> str:
+        return await self._run_room_operation(
+            lambda: self._orchestrator.create_room(room_id, display_name)
+        )
 
     async def join_room(self, invite_token: str, display_name: str) -> str:
-        commit_generation = self._orchestrator.commit_generation
-        result = self._room_rpc(
-            lambda: self._orchestrator.join_room(invite_token, display_name),
-            broadcast_after_change=True,
+        return await self._run_room_operation(
+            lambda: self._orchestrator.join_room(invite_token, display_name)
         )
-        if self._orchestrator.commit_generation != commit_generation:
-            await self._reschedule_presence_alarm()
-        return result
 
     async def authenticated_view(self, player_token: str) -> str:
-        return self._room_rpc(
+        return await self._run_room_operation(
             lambda: self._orchestrator.authenticated_view(player_token)
         )
 
     async def authenticate_room_player(self, player_token: str) -> str:
-        return self._room_rpc(
+        return await self._run_room_operation(
             lambda: self._orchestrator.authenticate_room_player(player_token)
         )
 
@@ -163,19 +174,14 @@ class GameRoom(DurableObject):
         expected_revision: int,
         action_id: str,
     ) -> str:
-        commit_generation = self._orchestrator.commit_generation
-        result = self._room_rpc(
+        return await self._run_room_operation(
             lambda: self._orchestrator.execute_command(
                 player_token,
                 command_id,
                 expected_revision,
                 action_id,
-            ),
-            broadcast_after_change=True,
+            )
         )
-        if self._orchestrator.commit_generation != commit_generation:
-            await self._reschedule_presence_alarm()
-        return result
 
     async def update_config(
         self,
@@ -183,13 +189,12 @@ class GameRoom(DurableObject):
         expected_revision: int,
         config_json: str,
     ) -> str:
-        return self._room_rpc(
+        return await self._run_room_operation(
             lambda: self._orchestrator.update_config(
                 player_token,
                 expected_revision,
                 config_json,
-            ),
-            broadcast_after_change=True,
+            )
         )
 
     async def projected_events(
@@ -197,7 +202,7 @@ class GameRoom(DurableObject):
         player_token: str,
         after_sequence: int,
     ) -> str:
-        return self._room_rpc(
+        return await self._run_room_operation(
             lambda: self._orchestrator.projected_events(
                 player_token,
                 after_sequence,
@@ -205,7 +210,7 @@ class GameRoom(DurableObject):
         )
 
     async def issue_socket_ticket(self, player_token: str) -> str:
-        return self._room_rpc(
+        return await self._run_room_operation(
             lambda: self._orchestrator.issue_socket_ticket(player_token)
         )
 
@@ -252,6 +257,7 @@ class GameRoom(DurableObject):
                 "The socket ticket protocol is invalid.",
             )
 
+        generation = self._orchestrator.commit_generation
         try:
             identity = self._orchestrator.consume_socket_ticket(ticket)
         except Exception as exc:
@@ -274,6 +280,14 @@ class GameRoom(DurableObject):
                 current_revision=error.get("currentRevision"),
             )
 
+        now_ms = self._orchestrator.last_sampled_time_ms
+        if now_ms is None:  # pragma: no cover - consume always samples
+            now_ms = self._orchestrator.sample_time_ms()
+        due_changed = self._orchestrator.commit_generation != generation
+        if due_changed:
+            await self._reschedule_room_alarm()
+            self._broadcast_views(now_ms=now_ms)
+
         from js import WebSocketPair
 
         client, server = WebSocketPair.new().object_values()
@@ -291,15 +305,17 @@ class GameRoom(DurableObject):
                 include_identity=(
                     str(identity.player_id),
                     identity.auth_generation,
-                )
+                ),
+                now_ms=now_ms,
             )
-            await self._reschedule_presence_alarm()
+            await self._reschedule_room_alarm()
             if presence_changed:
-                self._broadcast_views()
+                self._broadcast_views(now_ms=now_ms)
             else:
-                view = self._orchestrator.view_for_player_id(
+                view = self._orchestrator.current_view_for_player_id(
                     identity.player_id,
                     identity.auth_generation,
+                    now_ms=now_ms,
                 )
                 server.send(_room_view_frame(view))
         except Exception as exc:
@@ -332,10 +348,10 @@ class GameRoom(DurableObject):
             web_socket=client,
         )
 
-    async def _reschedule_presence_alarm(self) -> None:
-        """Point the room's sole alarm at its earliest durable expiry."""
+    async def _reschedule_room_alarm(self) -> None:
+        """Point the room's sole alarm at its earliest durable deadline."""
 
-        deadline_ms = self._orchestrator.next_presence_alarm_ms()
+        deadline_ms = self._orchestrator.next_alarm_ms()
         current_alarm = await self.ctx.storage.getAlarm()
         if deadline_ms is None:
             if current_alarm is not None:
@@ -343,6 +359,11 @@ class GameRoom(DurableObject):
             return
         if current_alarm is None or int(current_alarm) != deadline_ms:
             await self.ctx.storage.setAlarm(deadline_ms)
+
+    async def _reschedule_presence_alarm(self) -> None:
+        """Compatibility alias for test-only Milestone 2 probes."""
+
+        await self._reschedule_room_alarm()
 
     def _open_socket_identities(self) -> set[tuple[str, int]]:
         """Rediscover live identities without relying on in-memory socket state."""
@@ -364,6 +385,7 @@ class GameRoom(DurableObject):
         self,
         *,
         include_identity: tuple[str, int] | None = None,
+        now_ms: int | None = None,
     ) -> tuple[set[tuple[str, int]], bool]:
         """Atomically reconcile live sockets restored after a wake or upgrade."""
 
@@ -377,41 +399,60 @@ class GameRoom(DurableObject):
                 continue
             confirmed_live.add(identity)
         presence_changed = self._orchestrator.reconcile_socket_presence(
-            tuple(sorted(confirmed_live))
+            tuple(sorted(confirmed_live)),
+            now_ms=now_ms,
         )
         return confirmed_live, presence_changed
 
     async def _socket_departed(self, identity: tuple[str, int] | None) -> None:
         if identity is None:
             return
-        if identity in self._open_socket_identities():
+        if not self._orchestrator.active_socket_identity(*identity):
             return
         try:
-            presence_changed = self._orchestrator.player_disconnected(
-                *identity,
-                connected_identities=tuple(
-                    sorted(self._open_socket_identities())
-                ),
-            )
+            now_ms = self._orchestrator.sample_time_ms()
+            generation = self._orchestrator.commit_generation
+            self._orchestrator.advance_due(now_ms)
+            live_identities = self._open_socket_identities()
+            presence_changed = False
+            if identity not in live_identities:
+                presence_changed = self._orchestrator.player_disconnected(
+                    *identity,
+                    connected_identities=tuple(sorted(live_identities)),
+                    now_ms=now_ms,
+                )
         except Exception as exc:
             error = service_error_data(exc)
             if error is not None and error["status"] == 401:
                 return
             raise
-        await self._reschedule_presence_alarm()
-        if presence_changed:
-            self._broadcast_views()
+        await self._reschedule_room_alarm()
+        if (
+            presence_changed
+            or self._orchestrator.commit_generation != generation
+        ):
+            self._broadcast_views(now_ms=now_ms)
 
     async def alarm(self) -> None:
         """Expire due offline players and reschedule the earliest remaining one."""
 
-        confirmed_live, presence_changed = self._reconcile_open_socket_presence()
-        expired_player_ids = self._orchestrator.expire_disconnected_players(
-            tuple(sorted(confirmed_live))
+        now_ms = self._orchestrator.sample_time_ms()
+        generation = self._orchestrator.commit_generation
+        confirmed_live, presence_changed = self._reconcile_open_socket_presence(
+            now_ms=now_ms
         )
-        await self._reschedule_presence_alarm()
-        if presence_changed or expired_player_ids:
-            self._broadcast_views()
+        self._orchestrator.advance_due(now_ms)
+        expired_player_ids = self._orchestrator.expire_disconnected_players(
+            tuple(sorted(confirmed_live)),
+            now_ms=now_ms,
+        )
+        await self._reschedule_room_alarm()
+        if (
+            presence_changed
+            or expired_player_ids
+            or self._orchestrator.commit_generation != generation
+        ):
+            self._broadcast_views(now_ms=now_ms)
 
     def _close_identity_sockets(self, identity: tuple[str, int]) -> None:
         for socket in self.ctx.getWebSockets():
@@ -425,16 +466,22 @@ class GameRoom(DurableObject):
             ) == identity:
                 _close_socket(socket, 4001, "Room session ended")
 
-    def _broadcast_views(self) -> None:
+    def _broadcast_views(self, *, now_ms: int | None = None) -> None:
+        timestamp = now_ms
+        if timestamp is None:
+            timestamp = self._orchestrator.last_sampled_time_ms
+        if timestamp is None:
+            timestamp = self._orchestrator.sample_time_ms()
         for socket in self.ctx.getWebSockets():
             attachment = _socket_attachment(socket)
             if attachment is None:
                 _close_socket(socket, 1011, "Invalid connection state")
                 continue
             try:
-                view = self._orchestrator.view_for_player_id(
+                view = self._orchestrator.current_view_for_player_id(
                     attachment["playerId"],
                     attachment["authGeneration"],
+                    now_ms=timestamp,
                 )
                 socket.send(_room_view_frame(view))
             except Exception as exc:

@@ -7,7 +7,9 @@ const HOSTILE_ORIGIN = "https://hostile.example";
 const ROOM_NAME = "milestone-1-reconstruction";
 const SNAPSHOT_JSON = JSON.stringify({
   roomId: ROOM_NAME,
-  stateSchemaVersion: 2,
+  rulesetVersion: "0.1.0",
+  stateSchemaVersion: 3,
+  pendingDeadline: null,
   seats: [0, 1, 2, 3].map((slot) => ({
     seatId: `seat-${slot}`,
     slot,
@@ -148,10 +150,22 @@ function expectActionCatalog(view) {
         "tone",
         "disabledReason",
         "presentationSlot",
+        "presentationIndex",
       ].sort(),
     );
     expect([null, "primary", "neutral", "danger"]).toContain(action.tone);
-    expect(["roomActions", "invitation"]).toContain(action.presentationSlot);
+    expect([
+      "roomActions",
+      "invitation",
+      "concealedTile",
+      "drawnTile",
+    ]).toContain(action.presentationSlot);
+    if (action.presentationSlot === "concealedTile") {
+      expect(Number.isSafeInteger(action.presentationIndex)).toBe(true);
+      expect(action.presentationIndex).toBeGreaterThanOrEqual(0);
+    } else {
+      expect(action.presentationIndex).toBeNull();
+    }
     expect(
       action.disabledReason === null || typeof action.disabledReason === "string",
     ).toBe(true);
@@ -253,12 +267,15 @@ async function createRoom(displayName = "Host") {
     revision: 0,
     presenceVersion: 1,
     rulesetId: "singapore",
-    rulesetVersion: "0.1.0",
-    stateSchemaVersion: 2,
+    rulesetVersion: "0.2.0",
+    stateSchemaVersion: 3,
     capabilities: [
       "multiplayerLobby",
       "roomEvents",
       "hibernatingWebSockets",
+      "drawDiscard",
+      "bonusTiles",
+      "discardWindow",
     ],
   });
   expectDisconnected(created.view, created.playerId);
@@ -586,7 +603,7 @@ describe("Milestone 1 foundation remains compatible", () => {
     await expectApiError(roomResponse, 404);
   });
 
-  it("reconstructs the schema-v2 canonical room after eviction", async () => {
+  it("reconstructs the schema-v3 canonical room after eviction", async () => {
     await expect(loadFoundationRoom()).resolves.toBeNull();
 
     const canonicalSnapshot = await initializeFoundationRoom(SNAPSHOT_JSON);
@@ -595,7 +612,8 @@ describe("Milestone 1 foundation remains compatible", () => {
       revision: 0,
       rulesetId: "singapore",
       rulesetVersion: "0.1.0",
-      stateSchemaVersion: 2,
+      stateSchemaVersion: 3,
+      pendingDeadline: null,
     });
     await expect(loadFoundationRoom()).resolves.toBe(canonicalSnapshot);
 
@@ -611,7 +629,7 @@ describe("Milestone 1 foundation remains compatible", () => {
       "socket_tickets",
     ]);
     await expect(testRpc("/test/counts")).resolves.toEqual({
-      _sql_schema_migrations: 3,
+      _sql_schema_migrations: 4,
       events: 0,
       player_presence: 0,
       players: 0,
@@ -623,7 +641,7 @@ describe("Milestone 1 foundation remains compatible", () => {
     });
 
     await expect(testRpc("/test/seed-auxiliary", "POST")).resolves.toEqual({
-      _sql_schema_migrations: 3,
+      _sql_schema_migrations: 4,
       events: 1,
       player_presence: 0,
       players: 1,
@@ -634,7 +652,7 @@ describe("Milestone 1 foundation remains compatible", () => {
       socket_tickets: 1,
     });
     await expect(testRpc("/test/clear-auxiliary", "POST")).resolves.toEqual({
-      _sql_schema_migrations: 3,
+      _sql_schema_migrations: 4,
       events: 0,
       player_presence: 0,
       players: 0,
@@ -653,7 +671,7 @@ describe("Milestone 1 foundation remains compatible", () => {
   });
 });
 
-describe("Milestone 2 room HTTP API", () => {
+describe("Milestone 3 room HTTP API", () => {
   it("enforces strict input, native IDs, no-store, and exact-origin CORS", async () => {
     const strictCreate = await roomFetch("/rooms", {
       method: "POST",
@@ -1024,9 +1042,14 @@ describe("Milestone 2 room HTTP API", () => {
       type: "view",
       view: {
         status: "IN_MATCH",
-        game: { status: "PENDING_SETUP", dealerSeatId: null },
+        game: {
+          status: "ACTIVE",
+          dealerSeatId: expect.stringMatching(/^seat-[0-3]$/),
+          phase: { type: "awaitingDiscard" },
+        },
       },
     });
+    expect(JSON.stringify(started.result.view)).not.toContain("tileId");
 
     const fifthJoin = await roomFetch(`/rooms/${host.roomId}/join`, {
       method: "POST",
@@ -1151,8 +1174,11 @@ describe("Milestone 2 room HTTP API", () => {
     expect(started.result.type).toBe("view");
     expect(started.result.view.status).toBe("IN_MATCH");
     expect(started.result.view.game).toMatchObject({
-      status: "PENDING_SETUP",
-      dealerSeatId: null,
+      status: "ACTIVE",
+      dealerSeatId: expect.stringMatching(/^seat-[0-3]$/),
+      phase: {
+        type: expect.stringMatching(/^(awaitingDiscard|discardClaims)$/),
+      },
     });
     expect(started.result.view.seats.filter(({ occupant }) => occupant)).toHaveLength(
       4,
@@ -1162,6 +1188,37 @@ describe("Milestone 2 room HTTP API", () => {
         ({ occupant }) => occupant?.controllerType === "automated",
       ),
     ).toHaveLength(3);
+    expect(JSON.stringify(started.result.view)).not.toContain("tileId");
+
+    const startedPhase = started.result.view.game.phase.type;
+    if (startedPhase === "awaitingDiscard") {
+      expect(started.result.view.game.dealerSeatId).toBe("seat-0");
+      expect(started.result.view.deadlineMs).toBeNull();
+      expect(started.result.view.windowId).toBeNull();
+      expectActionCatalog(started.result.view);
+      expect(
+        started.result.view.actions.filter(
+          ({ presentationSlot }) => presentationSlot === "concealedTile",
+        ).map(({ presentationIndex }) => presentationIndex),
+      ).toEqual([...Array(13).keys()]);
+      expect(
+        started.result.view.actions.filter(
+          ({ presentationSlot }) => presentationSlot === "drawnTile",
+        ),
+      ).toHaveLength(1);
+    } else {
+      expect(started.result.view.deadlineMs).toEqual(expect.any(Number));
+      expect(started.result.view.windowId).toEqual(expect.any(String));
+      expect(started.result.view.actions).toEqual([]);
+    }
+
+    const eventsResponse = await roomFetch(`/rooms/${host.roomId}/events`, {
+      playerToken: host.playerToken,
+    });
+    expect(eventsResponse.status).toBe(200);
+    const eventPage = await responseJson(eventsResponse);
+    expect(eventPage.events.map(({ type }) => type)).toContain("handStarted");
+    expect(JSON.stringify(eventPage)).not.toContain("tileId");
 
     await apiWorker.evictDurableObject("GAME_ROOM", { id: host.roomId });
     const reconstructed = await getRoomView(host.roomId, host.playerToken);
@@ -1172,13 +1229,150 @@ describe("Milestone 2 room HTTP API", () => {
       config: started.result.view.config,
       players: started.result.view.players,
       seats: started.result.view.seats,
+      game: started.result.view.game,
+      deadlineMs: started.result.view.deadlineMs,
+      windowId: started.result.view.windowId,
     });
+    expect(reconstructed.actions).toEqual(started.result.view.actions);
 
     const lateJoin = await roomFetch(`/rooms/${host.roomId}/join`, {
       method: "POST",
       body: { inviteToken: host.inviteToken, displayName: "Too Late" },
     });
     await expectApiError(lateJoin, 409);
+  });
+});
+
+describe("Milestone 3 durable gameplay alarms", () => {
+  it("reconstructs a pending discard window and advances at 2999/3000 exactly once", async () => {
+    const roomName = `gameplay-alarm-${crypto.randomUUID()}`;
+    const createdEnvelope = await probeRoomRpc(
+      roomName,
+      "/test/room/create",
+      { displayName: "Alarm Host" },
+    );
+    expect(createdEnvelope).toEqual({ ok: true, data: expect.any(Object) });
+    const created = createdEnvelope.data;
+
+    const connectedEnvelope = await probeRoomRpc(
+      roomName,
+      "/test/room/connect",
+      { playerToken: created.playerToken },
+    );
+    expect(connectedEnvelope).toEqual({ ok: true, data: expect.any(Object) });
+    const connected = connectedEnvelope.data;
+    const start = findAction(connected, "Start Against Bots");
+
+    const startedEnvelope = await probeRoomRpc(
+      roomName,
+      "/test/room/command",
+      {
+        actionId: start.actionId,
+        commandId: nextCommandId("runtime-start"),
+        expectedRevision: connected.revision,
+        playerToken: created.playerToken,
+      },
+    );
+    expect(startedEnvelope).toEqual({ ok: true, data: expect.any(Object) });
+    const started = startedEnvelope.data.view;
+    expect(started).toMatchObject({
+      revision: 1,
+      status: "IN_MATCH",
+      deadlineMs: null,
+      windowId: null,
+      game: {
+        status: "ACTIVE",
+        dealerSeatId: "seat-0",
+        phase: { type: "awaitingDiscard", activeSeatId: "seat-0" },
+      },
+    });
+    const discard = started.actions.find(
+      ({ enabled, presentationSlot }) =>
+        enabled && presentationSlot === "drawnTile",
+    );
+    expect(discard).toBeDefined();
+
+    const discardedEnvelope = await probeRoomRpc(
+      roomName,
+      "/test/room/command",
+      {
+        actionId: discard.actionId,
+        commandId: nextCommandId("runtime-discard"),
+        expectedRevision: started.revision,
+        playerToken: created.playerToken,
+      },
+    );
+    expect(discardedEnvelope).toEqual({ ok: true, data: expect.any(Object) });
+    const pending = discardedEnvelope.data.view;
+    expect(pending).toMatchObject({
+      revision: 2,
+      deadlineMs: expect.any(Number),
+      windowId: expect.any(String),
+      game: {
+        phase: { type: "discardClaims", discardSequence: 1 },
+      },
+      actions: [],
+    });
+    expect(pending.deadlineMs - pending.serverTimeMs).toBe(3_000);
+    expect(JSON.stringify(pending)).not.toContain("tileId");
+
+    await runtimeWorker.evictDurableObject("GAME_ROOM", { name: roomName });
+    const boundary = await probeRoomRpc(
+      roomName,
+      "/test/room/gameplay-alarm-boundary",
+      {
+        deadlineMs: pending.deadlineMs,
+        playerToken: created.playerToken,
+      },
+    );
+    expect(boundary).toMatchObject({
+      alarmCommitted: true,
+      before: {
+        revision: 2,
+        serverTimeMs: pending.deadlineMs - 1,
+        deadlineMs: pending.deadlineMs,
+        windowId: pending.windowId,
+        game: { phase: { type: "discardClaims", discardSequence: 1 } },
+      },
+      after: {
+        revision: 3,
+        serverTimeMs: pending.deadlineMs,
+        deadlineMs: pending.deadlineMs + 3_000,
+        windowId: expect.any(String),
+        game: { phase: { type: "discardClaims", discardSequence: 2 } },
+        actions: [],
+      },
+      scheduledAlarmMs: pending.deadlineMs + 3_000,
+    });
+    expect(boundary.after.windowId).not.toBe(pending.windowId);
+    expect(boundary.after.game.discards).toHaveLength(2);
+    expect(JSON.stringify(boundary)).not.toContain("tileId");
+
+    const duplicate = await probeRoomRpc(
+      roomName,
+      "/test/room/gameplay-alarm-boundary",
+      {
+        deadlineMs: pending.deadlineMs,
+        playerToken: created.playerToken,
+      },
+    );
+    expect(duplicate).toMatchObject({
+      alarmCommitted: false,
+      before: { revision: 3, deadlineMs: pending.deadlineMs + 3_000 },
+      after: { revision: 3, deadlineMs: pending.deadlineMs + 3_000 },
+      scheduledAlarmMs: pending.deadlineMs + 3_000,
+    });
+
+    const eventsEnvelope = await probeRoomRpc(
+      roomName,
+      "/test/room/events",
+      { playerToken: created.playerToken, afterSequence: 0 },
+    );
+    expect(eventsEnvelope).toEqual({ ok: true, data: expect.any(Object) });
+    const eventTypes = eventsEnvelope.data.events.map(({ type }) => type);
+    expect(eventTypes).toContain("handStarted");
+    expect(eventTypes.filter((type) => type === "tileDiscarded")).toHaveLength(2);
+    expect(JSON.stringify(eventsEnvelope.data)).not.toContain("tileId");
   });
 });
 

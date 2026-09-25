@@ -30,7 +30,13 @@ from .contracts import DISCONNECT_GRACE_MS
 class RoomPresence:
     """Presence-side use cases layered on a :class:`RoomKernel`."""
 
-    def player_connected(self, player_id: str, auth_generation: int) -> bool:
+    def player_connected(
+        self,
+        player_id: str,
+        auth_generation: int,
+        *,
+        now_ms: int | None = None,
+    ) -> bool:
         """Reconcile one authenticated socket connection."""
 
         requested = (require_text(player_id, "player_id"), auth_generation)
@@ -47,17 +53,23 @@ class RoomPresence:
             if (record.player_id, record.auth_generation) not in disconnected
         }
         connected.add(requested)
-        return self.reconcile_socket_presence(tuple(sorted(connected)))
+        return self.reconcile_socket_presence(
+            tuple(sorted(connected)), now_ms=now_ms
+        )
 
     def reconcile_socket_presence(
         self,
         connected_identities: Sequence[tuple[str, int]],
+        *,
+        now_ms: int | None = None,
     ) -> bool:
         """Atomically reconcile a batch of live sockets and any host handoff."""
 
         connected = self._active_socket_identities(connected_identities)
         if not connected:
             return False
+        timestamp = self._now_ms() if now_ms is None else now_ms
+        require_non_negative_int(timestamp, "now_ms")
         state = self._require_room()
         connected_player_ids = {
             PlayerId(player_id) for player_id, _generation in connected
@@ -67,7 +79,7 @@ class RoomPresence:
             transition = reconcile_lobby_host(
                 state,
                 connected_player_ids,
-                now_ms=self._now_ms(),
+                now_ms=timestamp,
             )
         if transition is None:
             return self._repository.set_players_connected(connected)
@@ -85,6 +97,8 @@ class RoomPresence:
         player_id: str,
         auth_generation: int,
         connected_identities: Sequence[tuple[str, int]] | None = None,
+        *,
+        now_ms: int | None = None,
     ) -> bool:
         """Persist a final-socket close and its canonical lobby consequences."""
 
@@ -100,16 +114,17 @@ class RoomPresence:
         ):
             return False
         state = self._require_room()
-        now_ms = self._now_ms()
+        timestamp = self._now_ms() if now_ms is None else now_ms
+        require_non_negative_int(timestamp, "now_ms")
         expires_at_ms = (
             None
             if state.status in {RoomStatus.IN_MATCH, RoomStatus.FINISHED}
-            else now_ms + DISCONNECT_GRACE_MS
+            else timestamp + DISCONNECT_GRACE_MS
         )
         presence = PlayerPresenceRecord(
             player_id=player_id,
             auth_generation=auth_generation,
-            disconnected_at_ms=now_ms,
+            disconnected_at_ms=timestamp,
             disconnect_expires_at_ms=expires_at_ms,
         )
         transition = None
@@ -137,7 +152,7 @@ class RoomPresence:
                 state,
                 player_id,
                 connected_player_ids,
-                now_ms=now_ms,
+                now_ms=timestamp,
             )
         if transition is None:
             return self._repository.set_player_disconnected(presence)
@@ -158,23 +173,28 @@ class RoomPresence:
     def expire_disconnected_players(
         self,
         connected_identities: Sequence[tuple[str, int]],
+        *,
+        now_ms: int | None = None,
     ) -> tuple[str, ...]:
         """Idempotently evict due pre-match players that remain offline."""
 
         connected = set(self._active_socket_identities(connected_identities))
-        self.reconcile_socket_presence(tuple(sorted(connected)))
+        timestamp = self._now_ms() if now_ms is None else now_ms
+        require_non_negative_int(timestamp, "now_ms")
+        self.reconcile_socket_presence(
+            tuple(sorted(connected)), now_ms=timestamp
+        )
 
         state = self._require_room()
         if state.status in {RoomStatus.IN_MATCH, RoomStatus.FINISHED}:
             self._repository.clear_presence_expiration_deadlines()
             return ()
 
-        now_ms = self._now_ms()
         due = tuple(
             presence
             for presence in self._repository.list_player_presence()
             if presence.disconnect_expires_at_ms is not None
-            and presence.disconnect_expires_at_ms <= now_ms
+            and presence.disconnect_expires_at_ms <= timestamp
             and (presence.player_id, presence.auth_generation) not in connected
         )
         due = tuple(
@@ -199,14 +219,14 @@ class RoomPresence:
             if (
                 active_presence is None
                 or active_presence.disconnect_expires_at_ms is None
-                or active_presence.disconnect_expires_at_ms > now_ms
+                or active_presence.disconnect_expires_at_ms > timestamp
             ):
                 continue
             try:
                 transition = expire_disconnected_lobby_player(
                     current,
                     presence.player_id,
-                    now_ms=now_ms,
+                    now_ms=timestamp,
                 )
             except LobbyDomainError:
                 # An at-least-once alarm may observe an already-applied removal.

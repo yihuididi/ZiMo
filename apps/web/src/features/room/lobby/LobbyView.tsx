@@ -105,11 +105,12 @@ export function LobbyView({
               >
                 <p className="step-label">Match created</p>
                 <h2 id="setup-heading">
-                  Match started; gameplay arrives in Milestone 3
+                  This legacy match is not playable
                 </h2>
                 <p>
-                  Gameplay is intentionally not available in this preview. The
-                  room roster and rules are now locked.
+                  This room was started with ruleset v{view.rulesetVersion},
+                  before draw/discard play was enabled. Its roster and rules
+                  remain locked; create a new room for the Milestone 3 preview.
                 </p>
               </section>
             )}

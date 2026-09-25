@@ -127,6 +127,16 @@ _LOBBY_AUDIT_EVENT_TYPES = frozenset(
 )
 
 
+_GAMEPLAY_AUDIT_EVENT_TYPES = frozenset(
+    {
+        "handStarted",
+        "bonusExposed",
+        "tileDiscarded",
+        "previewTied",
+    }
+)
+
+
 @dataclass(frozen=True, slots=True)
 class LobbyAuditPayload:
     """Allow-listed public lobby fact with canonical, secret-free details."""
@@ -153,10 +163,37 @@ class LobbyAuditPayload:
         return cast(dict[str, object], json.loads(self.details_json))
 
 
+@dataclass(frozen=True, slots=True)
+class GameplayAuditPayload:
+    """Allow-listed public gameplay fact with no hidden tile identifiers."""
+
+    event_type: str
+    room_id: str
+    revision: int
+    details_json: str = "{}"
+
+    def __post_init__(self) -> None:
+        if self.event_type not in _GAMEPLAY_AUDIT_EVENT_TYPES:
+            raise ValueError("gameplay audit event type is not allow-listed")
+        object.__setattr__(self, "room_id", _identity_text(self.room_id, "room_id"))
+        _require_non_negative_int(self.revision, "revision")
+        canonical = _canonicalize_json_text(self.details_json, "details_json")
+        details = json.loads(canonical)
+        if type(details) is not dict:
+            raise ValueError("gameplay audit details must be a JSON object")
+        _validate_public_gameplay_event_details(self.event_type, details)
+        object.__setattr__(self, "details_json", canonical)
+
+    @property
+    def details(self) -> dict[str, object]:
+        return cast(dict[str, object], json.loads(self.details_json))
+
+
 SafeAuditPayload: TypeAlias = (
     RoomInitializedAuditPayload
     | RoomStateCommittedAuditPayload
     | LobbyAuditPayload
+    | GameplayAuditPayload
 )
 
 
@@ -164,6 +201,7 @@ _SAFE_AUDIT_PAYLOAD_TYPES = (
     RoomInitializedAuditPayload,
     RoomStateCommittedAuditPayload,
     LobbyAuditPayload,
+    GameplayAuditPayload,
 )
 
 
@@ -369,6 +407,64 @@ def _validate_public_event_details(value: Mapping[str, object]) -> None:
         raise ValueError("public event detail values must be scalar JSON values")
 
 
+def _validate_public_gameplay_event_details(
+    event_type: str, value: Mapping[str, object]
+) -> None:
+    """Reject private engine material even when it is JSON-scalar."""
+
+    _validate_public_event_details(value)
+    forbidden_fragments = (
+        "tileid",
+        "physical",
+        "wall",
+        "concealed",
+        "drawn",
+        "random",
+        "rng",
+        "seed",
+    )
+    for key in value:
+        folded = key.casefold().replace("_", "").replace("-", "")
+        if any(fragment in folded for fragment in forbidden_fragments):
+            raise ValueError("public gameplay details contain private engine state")
+
+    expected_keys = {
+        "handStarted": {"handId"},
+        "bonusExposed": {
+            "initial",
+            "seatId",
+            "tileFamily",
+            "tileValue",
+        },
+        "tileDiscarded": {
+            "discardSequence",
+            "seatId",
+            "tileFamily",
+            "tileValue",
+        },
+        "previewTied": {"outcome", "reason"},
+    }[event_type]
+    if set(value) != expected_keys:
+        raise ValueError("public gameplay details do not match their allow-list")
+    if event_type == "handStarted":
+        _require_text(value["handId"], "handId")
+    elif event_type == "bonusExposed":
+        if type(value["initial"]) is not bool:
+            raise ValueError("bonusExposed initial must be a boolean")
+        _require_text(value["seatId"], "seatId")
+        _require_text(value["tileFamily"], "tileFamily")
+        if type(value["tileValue"]) not in {str, int}:
+            raise ValueError("bonusExposed tileValue must be a string or integer")
+    elif event_type == "tileDiscarded":
+        _require_positive_int(value["discardSequence"], "discardSequence")
+        _require_text(value["seatId"], "seatId")
+        _require_text(value["tileFamily"], "tileFamily")
+        if type(value["tileValue"]) not in {str, int}:
+            raise ValueError("tileDiscarded tileValue must be a string or integer")
+    elif value != {"outcome": "TIE", "reason": "LIVE_WALL_EXHAUSTED"}:
+        raise ValueError("previewTied details are not allow-listed")
+
+
 def _validate_event(event: ProjectedAuditEvent) -> None:
     if type(event) not in (ProjectedAuditEvent, StoredAuditEvent):
         raise TypeError("audit event type is not allow-listed")
@@ -392,6 +488,13 @@ def _audit_payload_json(payload: SafeAuditPayload) -> str:
             "revision": payload.revision,
         }
     elif type(payload) is LobbyAuditPayload:
+        value = {
+            "type": payload.event_type,
+            "roomId": payload.room_id,
+            "revision": payload.revision,
+            "details": payload.details,
+        }
+    elif type(payload) is GameplayAuditPayload:
         value = {
             "type": payload.event_type,
             "roomId": payload.room_id,
@@ -446,6 +549,17 @@ def _parse_audit_payload(event_type: str, event_json: str) -> SafeAuditPayload:
                     "lobby audit payload contains non-public fields"
                 )
             payload = LobbyAuditPayload(
+                event_type=event_type,
+                room_id=value["roomId"],
+                revision=value["revision"],
+                details_json=_canonical_json_value(value["details"], "details"),
+            )
+        elif event_type in _GAMEPLAY_AUDIT_EVENT_TYPES:
+            if set(value) != {"type", "roomId", "revision", "details"}:
+                raise CorruptRoomStateError(
+                    "gameplay audit payload contains non-public fields"
+                )
+            payload = GameplayAuditPayload(
                 event_type=event_type,
                 room_id=value["roomId"],
                 revision=value["revision"],
@@ -542,6 +656,7 @@ def _now_ms() -> int:
 
 
 __all__ = [
+    "GameplayAuditPayload",
     "LobbyAuditPayload",
     "PlayerPresenceRecord",
     "PlayerRecord",

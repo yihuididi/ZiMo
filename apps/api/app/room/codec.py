@@ -14,6 +14,7 @@ if __package__.startswith("app."):
     from ..game import GameConfig
     from ..lobby import LobbyDomainError
     from ..persistence import (
+        GameplayAuditPayload,
         LobbyAuditPayload,
         RoomInitializedAuditPayload,
         RoomStateCommittedAuditPayload,
@@ -23,6 +24,7 @@ else:  # pragma: no cover - Python Workers load modules from the app directory.
     from game import GameConfig
     from lobby import LobbyDomainError
     from persistence import (
+        GameplayAuditPayload,
         LobbyAuditPayload,
         RoomInitializedAuditPayload,
         RoomStateCommittedAuditPayload,
@@ -73,6 +75,8 @@ def parse_complete_config(config_json: str) -> GameConfig:
 def project_event(event: StoredAuditEvent) -> ProjectedRoomEvent:
     payload = event.payload
     if isinstance(payload, LobbyAuditPayload):
+        details = payload.details
+    elif isinstance(payload, GameplayAuditPayload):
         details = payload.details
     elif isinstance(payload, RoomInitializedAuditPayload):
         details = {}

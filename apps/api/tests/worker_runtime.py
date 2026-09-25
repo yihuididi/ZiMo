@@ -9,9 +9,11 @@ are not reconstruction sources.
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Mapping
 from typing import Any
 
+from game import MilestoneThreeEngine
 from main import Default, GameRoom
 
 
@@ -36,6 +38,30 @@ _AUXILIARY_TABLES = (
 _FIXTURE_TIME_MS = 1_700_000_000_000
 
 
+class _MutableTestClock:
+    """Real time by default, with explicit boundary control for one test RPC."""
+
+    def __init__(self) -> None:
+        self.timestamp_ms: int | None = None
+
+    def now_ms(self) -> int:
+        if self.timestamp_ms is None:
+            return time.time_ns() // 1_000_000
+        return self.timestamp_ms
+
+
+class _ZeroRandomSource:
+    """Make the host the dealer and every automated decision reproducible."""
+
+    def randbelow(self, upper_bound: int) -> int:
+        if upper_bound <= 0:
+            raise ValueError("upper_bound must be positive")
+        return 0
+
+    def shuffled(self, values: tuple[Any, ...]) -> tuple[Any, ...]:
+        return tuple(values)
+
+
 def _row_value(row: Any, column: str) -> Any:
     if isinstance(row, Mapping):
         return row[column]
@@ -51,6 +77,83 @@ def _json(value: Any) -> str:
 
 class TestGameRoom(GameRoom):
     """Production adapter plus fixed test-only SQLite inspection RPCs."""
+
+    def __init__(self, ctx: Any, env: Any) -> None:
+        super().__init__(ctx, env)
+        self._test_clock = _MutableTestClock()
+        self._test_random = _ZeroRandomSource()
+        self._orchestrator._clock = self._test_clock
+        self._orchestrator._random_source = self._test_random
+        self._orchestrator._game_engine = MilestoneThreeEngine(
+            self._test_random
+        )
+
+    async def test_connect_player(self, player_token: str) -> str:
+        """Mark a bearer connected without constructing a WebSocket proxy."""
+
+        def connect() -> Any:
+            identity = self._orchestrator.authenticate_room_player(player_token)
+            now_ms = self._orchestrator.last_sampled_time_ms
+            if now_ms is None:  # pragma: no cover - authentication samples
+                raise RuntimeError("authentication did not sample time")
+            self._orchestrator.player_connected(
+                identity.player_id,
+                identity.auth_generation,
+                now_ms=now_ms,
+            )
+            return self._orchestrator.current_view_for_player_id(
+                identity.player_id,
+                identity.auth_generation,
+                now_ms=now_ms,
+            )
+
+        return await self._run_room_operation(connect)
+
+    async def test_gameplay_alarm_boundary(
+        self,
+        player_token: str,
+        deadline_ms: int,
+    ) -> str:
+        """Reconstruct a pending window, then run the real alarm at N-1/N."""
+
+        if (
+            isinstance(deadline_ms, bool)
+            or not isinstance(deadline_ms, int)
+            or deadline_ms <= 0
+        ):
+            raise TypeError("deadline_ms must be a positive integer")
+
+        self._test_clock.timestamp_ms = deadline_ms - 1
+        identity = self._orchestrator.authenticate_room_player(player_token)
+        before_generation = self._orchestrator.commit_generation
+        before = self._orchestrator.current_view_for_player_id(
+            identity.player_id,
+            identity.auth_generation,
+            now_ms=deadline_ms - 1,
+        )
+
+        self._test_clock.timestamp_ms = deadline_ms
+        await self.alarm()
+        after = self._orchestrator.current_view_for_player_id(
+            identity.player_id,
+            identity.auth_generation,
+            now_ms=deadline_ms,
+        )
+        scheduled_alarm = await self.ctx.storage.getAlarm()
+        return _json(
+            {
+                "after": json.loads(after.canonical_json()),
+                "alarmCommitted": (
+                    self._orchestrator.commit_generation > before_generation
+                ),
+                "before": json.loads(before.canonical_json()),
+                "scheduledAlarmMs": (
+                    None
+                    if scheduled_alarm is None
+                    else int(scheduled_alarm)
+                ),
+            }
+        )
 
     async def test_table_names(self) -> str:
         rows = list(

@@ -11,7 +11,7 @@ import {
 } from "./lib/api";
 import { loadRoomSession, saveRoomSession } from "./lib/session";
 import type { PublicRoomView } from "./lib/types";
-import { roomView } from "./test/fixtures";
+import { activeTableView, roomView } from "./test/fixtures";
 
 const socketHarness = vi.hoisted(() => ({ options: null as unknown }));
 
@@ -190,7 +190,7 @@ function viewWithDisconnectedMember({
   });
 }
 
-describe("Milestone 2 room UI", () => {
+describe("room UI", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.clearAllTimers();
@@ -1009,7 +1009,7 @@ describe("Milestone 2 room UI", () => {
     expect(screen.getByRole("button", { name: "Ready" })).toBeEnabled();
   });
 
-  it("shows a no-game-yet placeholder for PENDING_SETUP", () => {
+  it("keeps a legacy ruleset match explicit and non-playable", () => {
     openHostLobby(
       roomView({
         status: "IN_MATCH",
@@ -1029,9 +1029,90 @@ describe("Milestone 2 room UI", () => {
     );
     expect(
       screen.getByRole("heading", {
-        name: "Match started; gameplay arrives in Milestone 3",
+        name: "This legacy match is not playable",
       }),
     ).toBeVisible();
+    expect(screen.getByText(/started with ruleset v0.1.0/i)).toBeVisible();
     expect(screen.queryByText("Copy invitation link")).not.toBeInTheDocument();
+  });
+
+  it("shows a transient preparing state for a playable ruleset setup", () => {
+    openHostLobby(
+      roomView({
+        status: "IN_MATCH",
+        rulesetVersion: "0.2.0",
+        game: {
+          status: "PENDING_SETUP",
+          prevailingWind: "EAST",
+          dealerSeatId: null,
+          phase: null,
+          liveWallTileCount: 0,
+          reserveWallTileCount: 0,
+          discards: [],
+          balances: [],
+          result: null,
+          matchResult: null,
+        },
+      }),
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Preparing the table" }),
+    ).toBeVisible();
+    expect(screen.getByText(/authoritative 148-tile wall/i)).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Room lobby" })).not.toBeInTheDocument();
+  });
+
+  it("routes an active match to the table and submits only its opaque action", async () => {
+    const active = activeTableView();
+    vi.mocked(submitCommand).mockResolvedValue({
+      type: "view",
+      view: activeTableView({ revision: 13, actions: [] }),
+    });
+    openHostLobby(active);
+
+    expect(screen.getByRole("heading", { name: "Mahjong table" })).toBeVisible();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Discard 9 Characters" }),
+    );
+
+    await waitFor(() =>
+      expect(submitCommand).toHaveBeenCalledWith("room-a", "host-secret", {
+        commandId: "00000000-0000-4000-8000-000000000001",
+        expectedRevision: 12,
+        actionId: "opaque-discard-0",
+      }),
+    );
+    const submittedBody = vi.mocked(submitCommand).mock.calls[0][2];
+    expect(submittedBody).not.toHaveProperty("tileId");
+    expect(submittedBody).not.toHaveProperty("seatId");
+  });
+
+  it("replaces a reconnected table with the newest authoritative snapshot", () => {
+    const active = activeTableView();
+    openHostLobby(active);
+    expect(screen.getByLabelText("Wall tile counts")).toHaveTextContent("Live wall 67");
+
+    emitSocketView(
+      activeTableView({
+        revision: 13,
+        actions: [],
+        game: {
+          ...active.game!,
+          liveWallTileCount: 66,
+          phase: {
+            type: "awaitingDraw",
+            activeSeatId: "seat-3",
+            windowId: null,
+            discardSequence: null,
+            declaringSeatId: null,
+          },
+        },
+      }),
+    );
+
+    expect(screen.getByLabelText("Wall tile counts")).toHaveTextContent("Live wall 66");
+    expect(screen.getByText("Wei’s turn")).toBeVisible();
+    expect(screen.queryByRole("button", { name: /^Discard / })).not.toBeInTheDocument();
   });
 });
