@@ -8,12 +8,13 @@ from dataclasses import replace
 from typing import Any
 
 if __package__ == "persistence":  # Python Workers load from the app directory.
-    from game import RoomState
+    from game import RoomState, validate_milestone_three_room
 else:
-    from ..game import RoomState
+    from ..game import RoomState, validate_milestone_three_room
 
 from .errors import CorruptRoomStateError, PlayerProjectionError
 from .records import (
+    GameplayAuditPayload,
     LobbyAuditPayload,
     PlayerPresenceRecord,
     PlayerRecord,
@@ -66,6 +67,17 @@ def _record_from_state(state: RoomState) -> RoomStateRecord:
         raise ValueError(
             "RoomState differs from its strict canonical reconstruction"
         )
+    if str(validated_state.ruleset_version) == "0.2.0":
+        try:
+            validate_milestone_three_room(
+                validated_state,
+                require_deadline=True,
+            )
+        except Exception as exc:
+            raise ValueError(
+                "canonical preview state failed milestone-three validation"
+            ) from exc
+    _validate_persisted_gameplay_deadline(validated_state)
 
     room_id = _identity_text(validated_state.room_id, "room_id")
     ruleset_id = _identity_text(validated_state.ruleset_id, "ruleset_id")
@@ -75,6 +87,10 @@ def _record_from_state(state: RoomState) -> RoomStateRecord:
     state_schema_version = _require_positive_int(
         validated_state.state_schema_version, "state_schema_version"
     )
+    if state_schema_version != 3:
+        raise ValueError(
+            "canonical room persistence requires state_schema_version 3"
+        )
     revision = _require_non_negative_int(validated_state.revision, "revision")
     created_at_ms = _require_non_negative_int(
         validated_state.created_at_ms, "created_at_ms"
@@ -97,6 +113,26 @@ def _record_from_state(state: RoomState) -> RoomStateRecord:
         created_at_ms=created_at_ms,
         updated_at_ms=updated_at_ms,
     )
+
+
+def _validate_persisted_gameplay_deadline(state: RoomState) -> None:
+    """Require complete alarm metadata at the canonical persistence boundary."""
+
+    if str(state.ruleset_version) != "0.2.0":
+        return
+    hand = state.match.current_hand if state.match is not None else None
+    phase = None if hand is None else hand.phase
+    phase_type = getattr(phase, "type", None)
+    window_phase = phase_type in {"discardClaims", "kongRobbery"}
+    deadline = getattr(state, "pending_deadline", None)
+    if window_phase and deadline is None:
+        raise ValueError("an active gameplay window requires a persisted deadline")
+    if deadline is None:
+        return
+    if not window_phase:
+        raise ValueError("a gameplay deadline requires an active gameplay window")
+    if getattr(phase, "window_id", None) != deadline.window_id:
+        raise ValueError("gameplay deadline window_id must match the active phase")
 
 
 def _record_from_row(row: Any) -> RoomStateRecord:
@@ -155,6 +191,19 @@ def _validate_room_credential_transition(
         raise PlayerProjectionError("rotated invite token hash must change")
     if candidate.updated_at_ms < previous.updated_at_ms:
         raise PlayerProjectionError("invite credential timestamp cannot regress")
+
+
+def _validate_pending_deadline_transition(
+    previous: RoomState, candidate: RoomState
+) -> None:
+    """A persisted window deadline may be created or cleared, never extended."""
+
+    old = getattr(previous, "pending_deadline", None)
+    new = getattr(candidate, "pending_deadline", None)
+    if old is None or new is None:
+        return
+    if old.window_id == new.window_id and old.deadline_ms != new.deadline_ms:
+        raise ValueError("a pending gameplay deadline is immutable")
 
 
 def _validate_audit_events(
@@ -233,6 +282,10 @@ def _validate_stored_event_history(
         elif type(event.payload) is LobbyAuditPayload:
             # Several separately useful public facts (for example a departure
             # and deterministic host transfer) may share one canonical commit.
+            pass
+        elif type(event.payload) is GameplayAuditPayload:
+            # Gameplay projection is deliberately a separate allow-list so a
+            # future private domain event cannot become public by accident.
             pass
         else:  # Defensive: StoredAuditEvent construction is otherwise public.
             raise CorruptRoomStateError("stored audit payload type is not allow-listed")

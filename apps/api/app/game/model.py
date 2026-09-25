@@ -9,6 +9,10 @@ from pydantic import Field, model_validator
 from pydantic_core import core_schema
 
 from .base import GameModel
+from .capabilities import (
+    MILESTONE_3_RULESET_VERSION,
+    MILESTONE_3_STATE_SCHEMA_VERSION,
+)
 from .config import GameConfig
 
 
@@ -183,9 +187,21 @@ class TileFace(GameModel):
                 raise ValueError("suited tile values must be integer ranks")
             if not 1 <= self.value <= 9:
                 raise ValueError("suited tile ranks must be between 1 and 9")
+        elif self.family in {TileFamily.FLOWER, TileFamily.SEASON}:
+            if not isinstance(self.value, int) or isinstance(self.value, bool):
+                raise ValueError("flower and season values must be integer numbers")
+            if not 1 <= self.value <= 4:
+                raise ValueError("flower and season numbers must be between 1 and 4")
         else:
-            if not isinstance(self.value, str) or not self.value.strip():
-                raise ValueError("honour and bonus tile values must be non-empty names")
+            allowed = {
+                TileFamily.WIND: {"EAST", "SOUTH", "WEST", "NORTH"},
+                TileFamily.DRAGON: {"RED", "GREEN", "WHITE"},
+                TileFamily.ANIMAL: {"CAT", "MOUSE", "ROOSTER", "CENTIPEDE"},
+            }[self.family]
+            if not isinstance(self.value, str) or self.value not in allowed:
+                raise ValueError(
+                    f"{self.family.value} tile value is not in the canonical set"
+                )
         return self
 
 
@@ -444,8 +460,16 @@ class WallState(GameModel):
         return self
 
 
+class PendingDeadline(GameModel):
+    """Canonical room-owned deadline for the active discard window."""
+
+    window_id: WindowId = Field(min_length=1)
+    deadline_ms: int = Field(ge=0)
+
+
 class HandState(GameModel):
     hand_id: HandId = Field(min_length=1)
+    tile_id_salt: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     phase: HandPhase = Field(default_factory=SetupPhase)
     wall: WallState = Field(default_factory=WallState)
     player_hands: tuple[PlayerHand, ...]
@@ -754,10 +778,21 @@ class MatchState(GameModel):
         else:
             if self.dealer_seat_id is None:
                 raise ValueError("a finished match requires its final dealer")
-            if self.current_hand is not None:
-                raise ValueError("a finished match cannot retain a current hand")
             if self.result is None:
                 raise ValueError("a finished match requires a result")
+            if self.current_hand is not None:
+                if not isinstance(self.current_hand.phase, CompletePhase):
+                    raise ValueError(
+                        "a finished match may retain only its complete final hand"
+                    )
+                if (
+                    self.current_hand.result is None
+                    or not self.hand_history
+                    or self.hand_history[-1] != self.current_hand.result
+                ):
+                    raise ValueError(
+                        "a retained final hand result must end match history"
+                    )
             if {
                 balance.seat_id for balance in self.result.final_balances
             } != seat_id_set:
@@ -768,14 +803,15 @@ class MatchState(GameModel):
 class RoomState(GameModel):
     room_id: RoomId = Field(min_length=1)
     ruleset_id: Literal["singapore"] = "singapore"
-    ruleset_version: Literal["0.1.0"] = "0.1.0"
-    state_schema_version: Literal[2] = 2
+    ruleset_version: Literal["0.1.0", "0.2.0"] = "0.1.0"
+    state_schema_version: Literal[2, 3] = 2
     revision: int = Field(default=0, ge=0)
     config: GameConfig = Field(default_factory=GameConfig)
     status: RoomStatus = RoomStatus.CREATED
     seats: tuple[SeatState, ...]
     players: tuple[PlayerState, ...] = ()
     match: MatchState | None = None
+    pending_deadline: PendingDeadline | None = None
     created_at_ms: int = Field(ge=0)
     updated_at_ms: int = Field(ge=0)
 
@@ -784,15 +820,22 @@ class RoomState(GameModel):
         # Recheck the capability gate at the persistence serialization boundary.
         if self.config != GameConfig():
             raise ValueError(
-                "ruleset 0.1.0 cannot serialize unsupported game configuration"
+                "Singapore preview cannot serialize unsupported game configuration"
             )
         return super().canonical_data()
 
     @model_validator(mode="after")
     def validate_room(self) -> "RoomState":
+        if (
+            self.ruleset_version == MILESTONE_3_RULESET_VERSION
+            and self.state_schema_version != MILESTONE_3_STATE_SCHEMA_VERSION
+        ):
+            raise ValueError(
+                "state schema version does not match the pinned ruleset version"
+            )
         if self.config != GameConfig():
             raise ValueError(
-                "ruleset 0.1.0 does not permit non-default game configuration"
+                "Singapore preview does not permit non-default game configuration"
             )
         if len(self.seats) != 4:
             raise ValueError("a room requires exactly four stable seat slots")
@@ -863,6 +906,18 @@ class RoomState(GameModel):
             balance.seat_id for balance in self.match.balances
         } != set(seat_ids):
             raise ValueError("match seats must match the room's stable seats")
+        if self.pending_deadline is not None:
+            if self.ruleset_version != MILESTONE_3_RULESET_VERSION:
+                raise ValueError("only the draw/discard preview may have a deadline")
+            hand = self.match.current_hand if self.match is not None else None
+            if (
+                hand is None
+                or not isinstance(hand.phase, DiscardClaimsPhase)
+                or hand.phase.window_id != self.pending_deadline.window_id
+            ):
+                raise ValueError(
+                    "pending deadline must identify the active discard window"
+                )
         if self.updated_at_ms < self.created_at_ms:
             raise ValueError("updated_at_ms cannot precede created_at_ms")
         return self

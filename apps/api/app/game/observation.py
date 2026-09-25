@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, TypeAlias
+from typing import Annotated, Literal
 
 from pydantic import Field
 
 from .base import GameModel
+from .capabilities import (
+    MILESTONE_2_CAPABILITIES,
+    RoomCapability,
+    capabilities_for_ruleset_version,
+)
 from .config import GameConfig
 from .model import (
     AutomatedSeatController,
@@ -45,18 +50,6 @@ from .public import (
 
 class ObservationError(ValueError):
     """Raised when no authorized player observation can be constructed."""
-
-
-RoomCapability: TypeAlias = Literal[
-    "multiplayerLobby",
-    "roomEvents",
-    "hibernatingWebSockets",
-]
-MILESTONE_2_CAPABILITIES: tuple[RoomCapability, ...] = (
-    "multiplayerLobby",
-    "roomEvents",
-    "hibernatingWebSockets",
-)
 
 
 class ObservedOccupant(GameModel):
@@ -136,7 +129,8 @@ class PlayerObservation(GameModel):
     state_schema_version: int = Field(ge=1)
     capabilities: tuple[RoomCapability, ...] = MILESTONE_2_CAPABILITIES
     config: GameConfig
-    viewer_player_id: PlayerId
+    viewer_seat_id: SeatId
+    viewer_player_id: PlayerId | None = None
     seats: tuple[SeatObservation, ...]
     match: MatchObservation | None = None
 
@@ -210,25 +204,29 @@ def _phase_observation(phase: object) -> PhaseObservation:
     raise TypeError(f"unsupported hand phase: {type(phase)!r}")
 
 
-def build_player_observation(
+def build_seat_observation(
     room: RoomState,
-    viewer_player_id: PlayerId,
+    viewer_seat_id: SeatId,
     *,
-    capabilities: tuple[RoomCapability, ...] = MILESTONE_2_CAPABILITIES,
+    viewer_player_id: PlayerId | None = None,
+    capabilities: tuple[RoomCapability, ...] | None = None,
 ) -> PlayerObservation:
-    """Build an observation solely from explicitly selected safe fields."""
+    """Build a controller-safe observation for an external or automated seat."""
 
-    if not any(player.player_id == viewer_player_id for player in room.players):
-        raise ObservationError("viewer is not a room player")
-
-    viewer_seat_id = next(
-        (
-            seat.seat_id
-            for seat in room.seats
-            if isinstance(seat.controller, ExternalSeatController)
-            and seat.controller.player_id == viewer_player_id
-        ),
-        None,
+    viewer_seat = next(
+        (seat for seat in room.seats if seat.seat_id == viewer_seat_id), None
+    )
+    if viewer_seat is None or viewer_seat.controller is None:
+        raise ObservationError("viewer seat is not occupied")
+    if viewer_player_id is not None and (
+        not isinstance(viewer_seat.controller, ExternalSeatController)
+        or viewer_seat.controller.player_id != viewer_player_id
+    ):
+        raise ObservationError("viewer player does not control the viewer seat")
+    selected_capabilities = (
+        capabilities_for_ruleset_version(room.ruleset_version)
+        if capabilities is None
+        else capabilities
     )
     winds = _seat_winds(room)
     hands = (
@@ -319,9 +317,37 @@ def build_player_observation(
         ruleset_id=room.ruleset_id,
         ruleset_version=room.ruleset_version,
         state_schema_version=room.state_schema_version,
-        capabilities=capabilities,
+        capabilities=selected_capabilities,
         config=room.config,
+        viewer_seat_id=viewer_seat_id,
         viewer_player_id=viewer_player_id,
         seats=tuple(observed_seats),
         match=match_observation,
+    )
+
+
+def build_player_observation(
+    room: RoomState,
+    viewer_player_id: PlayerId,
+    *,
+    capabilities: tuple[RoomCapability, ...] | None = None,
+) -> PlayerObservation:
+    """Build an authenticated human observation through the seat-scoped core."""
+
+    viewer_seat_id = next(
+        (
+            seat.seat_id
+            for seat in room.seats
+            if isinstance(seat.controller, ExternalSeatController)
+            and seat.controller.player_id == viewer_player_id
+        ),
+        None,
+    )
+    if viewer_seat_id is None:
+        raise ObservationError("viewer is not a room player")
+    return build_seat_observation(
+        room,
+        viewer_seat_id,
+        viewer_player_id=viewer_player_id,
+        capabilities=capabilities,
     )

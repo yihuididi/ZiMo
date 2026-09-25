@@ -1,5 +1,6 @@
 @import "./styles/base.css";
 @import "./styles/home.css";
+@import "./styles/table.css";
 
 .brand-mark,
 .loading-mark {

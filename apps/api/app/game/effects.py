@@ -29,8 +29,14 @@ class AutomatedDecisionRequested(GameModel):
     seat_id: SeatId = Field(min_length=1)
 
 
+class MatchCompletionRequested(GameModel):
+    """Ask room orchestration to finalize a clock-free completed preview."""
+
+    type: Literal["matchCompletionRequested"] = "matchCompletionRequested"
+
+
 DomainEffect = Annotated[
-    ClaimWindowRequested | AutomatedDecisionRequested,
+    ClaimWindowRequested | AutomatedDecisionRequested | MatchCompletionRequested,
     Field(discriminator="type"),
 ]
 

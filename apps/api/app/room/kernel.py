@@ -11,13 +11,18 @@ from pydantic import ValidationError
 
 if __package__.startswith("app."):
     from ..game import (
+        AutomatedPolicySelector,
         Clock,
         ExternalSeatController,
+        MilestoneThreeEngine,
         PlayerId,
         PublicRoomView,
+        RandomSource,
         RoomState,
         RoomStatus,
+        StaticAutomatedPolicySelector,
         SystemClock,
+        SystemRandomSource,
         build_public_room_view,
         deserialize_room_state,
     )
@@ -36,13 +41,18 @@ if __package__.startswith("app."):
     )
 else:  # pragma: no cover - Python Workers load modules from the app directory.
     from game import (
+        AutomatedPolicySelector,
         Clock,
         ExternalSeatController,
+        MilestoneThreeEngine,
         PlayerId,
         PublicRoomView,
+        RandomSource,
         RoomState,
         RoomStatus,
+        StaticAutomatedPolicySelector,
         SystemClock,
+        SystemRandomSource,
         build_public_room_view,
         deserialize_room_state,
     )
@@ -86,6 +96,9 @@ class RoomKernel:
         clock: Clock | None = None,
         credential_source: Callable[[], str] | None = None,
         id_source: Callable[[str], str] | None = None,
+        random_source: RandomSource | None = None,
+        policy_selector: AutomatedPolicySelector | None = None,
+        game_engine: MilestoneThreeEngine | None = None,
     ) -> None:
         self._repository = repository
         self._clock = SystemClock() if clock is None else clock
@@ -95,8 +108,22 @@ class RoomKernel:
         self._id_source = id_source or (
             lambda prefix: f"{prefix}_{secrets.token_hex(16)}"
         )
+        self._random_source = (
+            SystemRandomSource() if random_source is None else random_source
+        )
+        self._policy_selector = (
+            StaticAutomatedPolicySelector()
+            if policy_selector is None
+            else policy_selector
+        )
+        self._game_engine = (
+            MilestoneThreeEngine(self._random_source)
+            if game_engine is None
+            else game_engine
+        )
         self._cached_state: RoomState | None = None
         self._commit_generation = 0
+        self._last_sampled_time_ms: int | None = None
 
     @property
     def cached_state(self) -> RoomState | None:
@@ -228,18 +255,27 @@ class RoomKernel:
             )
             for presence in self._repository.list_player_presence()
         }
+        lobby_actions = tuple(
+            item.descriptor
+            for item in catalog_lobby_actions(
+                state,
+                actor,
+                viewer_connected=str(actor) not in disconnected_players,
+            )
+        )
+        gameplay_actions = tuple(
+            item.descriptor
+            for item in self._catalog_gameplay_actions(state, player_id)
+        )
+        deadline = state.pending_deadline
         return build_public_room_view(
             state,
             actor,
             server_time_ms=now_ms,
-            actions=tuple(
-                item.descriptor
-                for item in catalog_lobby_actions(
-                    state,
-                    actor,
-                    viewer_connected=str(actor) not in disconnected_players,
-                )
-            ),
+            capabilities=self._capabilities(state),
+            actions=(*lobby_actions, *gameplay_actions),
+            deadline_ms=None if deadline is None else deadline.deadline_ms,
+            window_id=None if deadline is None else deadline.window_id,
             disconnected_players=disconnected_players,
             presence_version=self._repository.presence_version(),
         )
@@ -447,7 +483,18 @@ class RoomKernel:
         return require_text(self._id_source(prefix), f"{prefix}_id")
 
     def _now_ms(self) -> int:
-        return require_non_negative_int(self._clock.now_ms(), "clock.now_ms")
+        value = require_non_negative_int(self._clock.now_ms(), "clock.now_ms")
+        self._last_sampled_time_ms = value
+        return value
+
+    def sample_time_ms(self) -> int:
+        """Sample the injected clock once for a complete incoming operation."""
+
+        return self._now_ms()
+
+    @property
+    def last_sampled_time_ms(self) -> int | None:
+        return self._last_sampled_time_ms
 
 
 __all__ = ["RoomKernel"]

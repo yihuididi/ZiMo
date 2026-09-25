@@ -5,15 +5,19 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Annotated, Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from .base import GameModel
+from .capabilities import (
+    MILESTONE_2_CAPABILITIES,
+    RoomCapability,
+    capabilities_for_ruleset_version,
+)
 from .config import GameConfig
 from .model import (
     HandResult,
     MatchStatus,
     MatchResult,
-    PhysicalTile,
     PlayerId,
     PlayerRole,
     RoomId,
@@ -25,16 +29,19 @@ from .model import (
     WindowId,
 )
 from .observation import (
-    MILESTONE_2_CAPABILITIES,
     OpponentSeatObservation,
     ObservedOccupant,
     OwnSeatObservation,
     PhaseObservation,
     PlayerObservation,
-    RoomCapability,
     build_player_observation,
 )
-from .public import PublicDiscardView, PublicMeldView, PublicTileView
+from .public import (
+    PublicDiscardView,
+    PublicMeldView,
+    PublicTileView,
+    project_public_tile,
+)
 
 
 class OpaqueActionDescriptor(GameModel):
@@ -45,7 +52,23 @@ class OpaqueActionDescriptor(GameModel):
     enabled: bool = True
     tone: Literal["primary", "neutral", "danger"] | None = None
     disabled_reason: str | None = Field(default=None, min_length=1, max_length=256)
-    presentation_slot: Literal["roomActions", "invitation"] = "roomActions"
+    presentation_slot: Literal[
+        "roomActions",
+        "invitation",
+        "concealedTile",
+        "drawnTile",
+    ] = "roomActions"
+    presentation_index: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_presentation_target(self) -> "OpaqueActionDescriptor":
+        if (self.presentation_slot == "concealedTile") != (
+            self.presentation_index is not None
+        ):
+            raise ValueError(
+                "presentationIndex is required only for concealedTile actions"
+            )
+        return self
 
 
 class PublicPlayerView(GameModel):
@@ -71,8 +94,8 @@ class SelfSeatView(GameModel):
     slot: int = Field(ge=0, lt=4)
     wind: Wind | None = None
     occupant: PublicOccupantView | None = None
-    concealed_tiles: tuple[PhysicalTile, ...] = ()
-    drawn_tile: PhysicalTile | None = None
+    concealed_tiles: tuple[PublicTileView, ...] = ()
+    drawn_tile: PublicTileView | None = None
     melds: tuple[PublicMeldView, ...] = ()
     bonus_tiles: tuple[PublicTileView, ...] = ()
 
@@ -153,8 +176,14 @@ def _project_from_observation(
                     slot=seat.slot,
                     wind=seat.wind,
                     occupant=_project_occupant(seat.occupant),
-                    concealed_tiles=seat.concealed_tiles,
-                    drawn_tile=seat.drawn_tile,
+                    concealed_tiles=tuple(
+                        project_public_tile(tile) for tile in seat.concealed_tiles
+                    ),
+                    drawn_tile=(
+                        project_public_tile(seat.drawn_tile)
+                        if seat.drawn_tile is not None
+                        else None
+                    ),
                     melds=seat.melds,
                     bonus_tiles=seat.bonus_tiles,
                 )
@@ -182,7 +211,7 @@ def build_public_room_view(
     viewer_player_id: PlayerId,
     *,
     server_time_ms: int,
-    capabilities: tuple[RoomCapability, ...] = MILESTONE_2_CAPABILITIES,
+    capabilities: tuple[RoomCapability, ...] | None = None,
     actions: tuple[OpaqueActionDescriptor, ...] = (),
     deadline_ms: int | None = None,
     window_id: WindowId | None = None,
@@ -191,8 +220,26 @@ def build_public_room_view(
 ) -> PublicRoomView:
     """Build a UI view without accepting or serializing domain action objects."""
 
+    canonical_deadline_ms = (
+        None
+        if room.pending_deadline is None
+        else room.pending_deadline.deadline_ms
+    )
+    canonical_window_id = (
+        None if room.pending_deadline is None else room.pending_deadline.window_id
+    )
+    if deadline_ms is not None and deadline_ms != canonical_deadline_ms:
+        raise ValueError("projected deadline must match canonical room state")
+    if window_id is not None and window_id != canonical_window_id:
+        raise ValueError("projected window must match canonical room state")
+
+    selected_capabilities = (
+        capabilities_for_ruleset_version(room.ruleset_version)
+        if capabilities is None
+        else capabilities
+    )
     observation = build_player_observation(
-        room, viewer_player_id, capabilities=capabilities
+        room, viewer_player_id, capabilities=selected_capabilities
     )
     game = None
     if observation.match is not None:
@@ -218,12 +265,12 @@ def build_public_room_view(
         ruleset_id=room.ruleset_id,
         ruleset_version=room.ruleset_version,
         state_schema_version=room.state_schema_version,
-        capabilities=capabilities,
+        capabilities=selected_capabilities,
         config=room.config,
         viewer_player_id=viewer_player_id,
         server_time_ms=server_time_ms,
-        deadline_ms=deadline_ms,
-        window_id=window_id,
+        deadline_ms=canonical_deadline_ms,
+        window_id=canonical_window_id,
         players=tuple(
             PublicPlayerView(
                 player_id=player.player_id,

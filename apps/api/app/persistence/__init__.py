@@ -19,6 +19,7 @@ else:
     from ..game import RoomState
 
 from .records import (
+    _GAMEPLAY_AUDIT_EVENT_TYPES,
     _LOBBY_AUDIT_EVENT_TYPES,
     _SAFE_AUDIT_PAYLOAD_TYPES,
     _audit_payload_json,
@@ -37,6 +38,7 @@ from .records import (
     _validate_event,
     _validate_player,
     _validate_player_presence,
+    _validate_public_gameplay_event_details,
     _validate_processed_command,
     _validate_public_event_details,
     _validate_room_credential,
@@ -74,6 +76,8 @@ from .validation import (
     _validate_player_security_transition,
     _validate_players_against_state,
     _validate_presence_references,
+    _validate_pending_deadline_transition,
+    _validate_persisted_gameplay_deadline,
     _validate_room_credential_transition,
     _validate_security_references,
     _validate_stored_event_history,

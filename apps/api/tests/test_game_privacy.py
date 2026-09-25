@@ -96,7 +96,7 @@ def private_room() -> RoomState:
                 tile(
                     "OWN_BONUS_TILE_ID",
                     family=TileFamily.ANIMAL,
-                    value="OWN_BONUS_FACE_PUBLIC",
+                    value="CAT",
                 ),
             ),
         ),
@@ -120,7 +120,7 @@ def private_room() -> RoomState:
                         tile(
                             f"CONCEALED_MELD_PHYSICAL_ID_{index}",
                             family=TileFamily.DRAGON,
-                            value="CONCEALED_MELD_FACE_SENTINEL",
+                            value="RED",
                         )
                         for index in range(4)
                     ),
@@ -130,7 +130,7 @@ def private_room() -> RoomState:
                 tile(
                     "OPPONENT_BONUS_TILE_ID",
                     family=TileFamily.ANIMAL,
-                    value="OPPONENT_BONUS_FACE_PUBLIC",
+                    value="ROOSTER",
                 ),
             ),
         ),
@@ -159,7 +159,7 @@ def private_room() -> RoomState:
                 tile=tile(
                     "DISCARD_PHYSICAL_TILE_ID",
                     family=TileFamily.DRAGON,
-                    value="DISCARD_FACE_PUBLIC",
+                    value="GREEN",
                 ),
                 discarded_by_seat_id=seat_ids[2],
             ),
@@ -228,10 +228,9 @@ class ObservationPrivacyTests(unittest.TestCase):
             "DISCARD_PHYSICAL_TILE_ID",
         ):
             self.assertNotIn(physical_id, encoded)
-        self.assertNotIn("CONCEALED_MELD_FACE_SENTINEL", encoded)
-        self.assertIn("OWN_BONUS_FACE_PUBLIC", encoded)
-        self.assertIn("OPPONENT_BONUS_FACE_PUBLIC", encoded)
-        self.assertIn("DISCARD_FACE_PUBLIC", encoded)
+        self.assertIn('"value":"CAT"', encoded)
+        self.assertIn('"value":"ROOSTER"', encoded)
+        self.assertIn('"value":"GREEN"', encoded)
 
         own = observation.seats[0]
         opponent = observation.seats[1]
@@ -272,7 +271,8 @@ class ObservationPrivacyTests(unittest.TestCase):
             actions=(OpaqueActionDescriptor(action_id="opaque-123", label="Choice"),),
         )
         encoded = view.canonical_json()
-        self.assertIn("OWN_CONCEALED_SENTINEL", encoded)
+        self.assertNotIn("OWN_CONCEALED_SENTINEL", encoded)
+        self.assertNotIn("OWN_DRAWN_SENTINEL", encoded)
         self.assertIn("opaque-123", encoded)
         for sentinel in (
             "OPPONENT_CONCEALED_SENTINEL",
@@ -286,13 +286,12 @@ class ObservationPrivacyTests(unittest.TestCase):
             "OPPONENT_EXPOSED_MELD_ID_1",
             "OPPONENT_BONUS_TILE_ID",
             "CONCEALED_MELD_PHYSICAL_ID_1",
-            "CONCEALED_MELD_FACE_SENTINEL",
             "DISCARD_PHYSICAL_TILE_ID",
         ):
             self.assertNotIn(sentinel, encoded)
-        self.assertIn("OWN_BONUS_FACE_PUBLIC", encoded)
-        self.assertIn("OPPONENT_BONUS_FACE_PUBLIC", encoded)
-        self.assertIn("DISCARD_FACE_PUBLIC", encoded)
+        self.assertIn('"value":"CAT"', encoded)
+        self.assertIn('"value":"ROOSTER"', encoded)
+        self.assertIn('"value":"GREEN"', encoded)
 
         opponent = view.seats[1]
         self.assertIsInstance(opponent, OpponentSeatView)

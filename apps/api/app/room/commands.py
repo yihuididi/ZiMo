@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 if __package__.startswith("app."):
-    from ..game import GameConfig, PublicRoomView
+    from ..game import GameConfig, PublicRoomView, RoomStatus
     from ..lobby import (
         LobbyDomainError,
         apply_lobby_action,
@@ -22,7 +24,7 @@ if __package__.startswith("app."):
         SocketTicketUnavailableError,
     )
 else:  # pragma: no cover - Python Workers load modules from the app directory.
-    from game import GameConfig, PublicRoomView
+    from game import GameConfig, PublicRoomView, RoomStatus
     from lobby import (
         LobbyDomainError,
         apply_lobby_action,
@@ -116,6 +118,8 @@ class RoomCommands:
         state = self._require_room()
         self._require_invite(invite_token)
         now_ms = self._now_ms()
+        self._advance_due_at(now_ms)
+        state = self._require_room()
         player_id = self._new_id("player")
         player_token = self._new_capability()
         try:
@@ -142,15 +146,16 @@ class RoomCommands:
 
     def authenticated_view(self, player_token: str) -> PublicRoomView:
         player = self._authenticate(player_token)
-        return self._view(
-            self._require_room(), player.player_id, now_ms=self._now_ms()
-        )
+        now_ms = self._now_ms()
+        self._advance_due_at(now_ms)
+        return self._view(self._require_room(), player.player_id, now_ms=now_ms)
 
     def authenticate_room_player(self, player_token: str) -> AuthenticatedPlayer:
         """Authenticate for transport preflight without projecting a room view."""
 
-        self._require_room()
         player = self._authenticate(player_token)
+        now_ms = self._now_ms()
+        self._advance_due_at(now_ms)
         return AuthenticatedPlayer(
             player_id=player.player_id,
             auth_generation=player.auth_generation,
@@ -166,9 +171,32 @@ class RoomCommands:
             raise RoomServiceError(
                 "invalidPlayerToken", 401, "Authentication is invalid."
             )
-        return self._view(
-            self._require_room(), player.player_id, now_ms=self._now_ms()
+        now_ms = self._now_ms()
+        self._advance_due_at(now_ms)
+        return self.current_view_for_player_id(
+            player.player_id,
+            auth_generation,
+            now_ms=now_ms,
         )
+
+    def current_view_for_player_id(
+        self,
+        player_id: str,
+        auth_generation: int | None = None,
+        *,
+        now_ms: int,
+    ) -> PublicRoomView:
+        """Project after the caller has already advanced and sampled time."""
+
+        require_non_negative_int(now_ms, "now_ms")
+        player = self._repository.get_player(player_id)
+        if player is None or (
+            auth_generation is not None and player.auth_generation != auth_generation
+        ):
+            raise RoomServiceError(
+                "invalidPlayerToken", 401, "Authentication is invalid."
+            )
+        return self._view(self._require_room(), player.player_id, now_ms=now_ms)
 
     def active_socket_identity(self, player_id: str, auth_generation: int) -> bool:
         player = self._repository.get_player(player_id)
@@ -182,6 +210,8 @@ class RoomCommands:
         action_id: str,
     ) -> CommandResult:
         player = self._authenticate(player_token)
+        now_ms = self._now_ms()
+        self._advance_due_at(now_ms)
         state = self._require_room()
         require_non_negative_int(expected_revision, "expected_revision")
         require_text(command_id, "command_id")
@@ -211,22 +241,62 @@ class RoomCommands:
                 "The room revision is stale.",
                 current_revision=state.revision,
             )
-        try:
-            action = resolve_lobby_action(
+        transition = None
+        domain_events = ()
+        if state.status in {
+            RoomStatus.CREATED,
+            RoomStatus.WAITING_FOR_PLAYERS,
+            RoomStatus.READY,
+        }:
+            try:
+                action = resolve_lobby_action(
+                    state,
+                    player.player_id,
+                    action_id,
+                    viewer_connected=self._player_is_connected(player.player_id),
+                )
+                transition = apply_lobby_action(
+                    state, player.player_id, action, now_ms=now_ms
+                )
+            except LobbyDomainError as exc:
+                raise lobby_service_error(
+                    exc, current_revision=state.revision
+                ) from exc
+            if transition.state.status is RoomStatus.IN_MATCH:
+                started, domain_events = self._setup_started_match(
+                    transition.state,
+                    now_ms=now_ms,
+                )
+                transition = replace(transition, state=started)
+            next_state = transition.state
+            events = (
+                *self._transition_events(transition),
+                *self._gameplay_audit_events(
+                    next_state,
+                    domain_events,
+                    created_at_ms=now_ms,
+                ),
+            )
+            players = self._player_records_for_state(next_state)
+        else:
+            action = self._resolve_gameplay_action(
+                state, player.player_id, action_id
+            )
+            next_state, domain_events = self._apply_gameplay_action(
                 state,
-                player.player_id,
-                action_id,
-                viewer_connected=self._player_is_connected(player.player_id),
+                action,
+                now_ms=now_ms,
             )
-            transition = apply_lobby_action(
-                state, player.player_id, action, now_ms=self._now_ms()
+            events = self._gameplay_audit_events(
+                next_state,
+                domain_events,
+                created_at_ms=now_ms,
             )
-        except LobbyDomainError as exc:
-            raise lobby_service_error(exc, current_revision=state.revision) from exc
+            players = None
 
         invite_token: str | None = None
         credential: RoomCredentialRecord | None = None
-        if transition.rotate_invite:
+        if transition is not None and transition.rotate_invite:
             current_credential = self._repository.load_room_credentials()
             if current_credential is None:
                 raise RoomServiceError(
@@ -239,19 +309,19 @@ class RoomCommands:
                 invite_token_hash=capability_hash(invite_token),
                 invite_generation=current_credential.invite_generation + 1,
                 created_at_ms=current_credential.created_at_ms,
-                updated_at_ms=transition.state.updated_at_ms,
+                updated_at_ms=next_state.updated_at_ms,
             )
 
-        if transition.session_ended:
+        if transition is not None and transition.session_ended:
             result: CommandResult = SessionEndedResult(
-                revision=transition.state.revision
+                revision=next_state.revision
             )
         else:
             result = CommandViewResult(
                 view=self._view(
-                    transition.state,
+                    next_state,
                     player.player_id,
-                    now_ms=transition.state.updated_at_ms,
+                    now_ms=now_ms,
                 ),
                 invite_token=invite_token,
             )
@@ -259,17 +329,20 @@ class RoomCommands:
             player_id=player.player_id,
             command_id=command_id,
             request_fingerprint=fingerprint,
-            revision=transition.state.revision,
+            revision=next_state.revision,
             result_json=stored_command_result(
-                result, rotated_invite=transition.rotate_invite
+                result,
+                rotated_invite=(
+                    transition is not None and transition.rotate_invite
+                ),
             ),
-            processed_at_ms=transition.state.updated_at_ms,
+            processed_at_ms=now_ms,
         )
         self._commit(
-            transition.state,
+            next_state,
             expected_revision=state.revision,
-            players=self._player_records_for_state(transition.state),
-            events=self._transition_events(transition),
+            players=players,
+            events=events,
             processed_commands=(command,),
             room_credentials=credential,
         )
@@ -279,6 +352,8 @@ class RoomCommands:
         self, player_token: str, expected_revision: int, config_json: str
     ) -> CommandViewResult:
         player = self._authenticate(player_token)
+        now_ms = self._now_ms()
+        self._advance_due_at(now_ms)
         state = self._require_room()
         try:
             authorize_lobby_config(state, player.player_id)
@@ -302,7 +377,7 @@ class RoomCommands:
             )
         try:
             transition = update_lobby_config(
-                state, player.player_id, config, now_ms=self._now_ms()
+                state, player.player_id, config, now_ms=now_ms
             )
         except LobbyDomainError as exc:
             raise lobby_service_error(exc, current_revision=state.revision) from exc
@@ -311,7 +386,7 @@ class RoomCommands:
                 view=self._view(
                     state,
                     player.player_id,
-                    now_ms=transition.state.updated_at_ms,
+                    now_ms=now_ms,
                 )
             )
         persisted = self._commit(
@@ -324,7 +399,7 @@ class RoomCommands:
             view=self._view(
                 persisted,
                 player.player_id,
-                now_ms=transition.state.updated_at_ms,
+                now_ms=now_ms,
             )
         )
 
@@ -332,6 +407,8 @@ class RoomCommands:
         self, player_token: str, after_sequence: int = 0
     ) -> ProjectedEvents:
         self._authenticate(player_token)
+        now_ms = self._now_ms()
+        self._advance_due_at(now_ms)
         require_non_negative_int(after_sequence, "after_sequence")
         stored = self._repository.list_events(after_sequence=after_sequence)
         events = tuple(project_event(event) for event in stored)
@@ -343,6 +420,7 @@ class RoomCommands:
     def issue_socket_ticket(self, player_token: str) -> IssuedSocketTicket:
         player = self._authenticate(player_token)
         now_ms = self._now_ms()
+        self._advance_due_at(now_ms)
         ticket = self._new_capability()
         record = SocketTicketRecord(
             ticket_hash=capability_hash(ticket),
@@ -367,6 +445,7 @@ class RoomCommands:
             raise RoomServiceError(
                 "invalidSocketTicket", 401, "The socket ticket is invalid."
             ) from exc
+        self._advance_due_at(timestamp)
         return AuthenticatedPlayer(
             player_id=record.player_id,
             auth_generation=record.auth_generation,

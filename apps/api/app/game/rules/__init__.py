@@ -1,5 +1,9 @@
 """Concrete rulesets."""
 
-from .singapore import SingaporeRules, UnsupportedConfigurationError
+from .singapore import (
+    SingaporeRules,
+    UnsupportedConfigurationError,
+    rules_for_version,
+)
 
-__all__ = ["SingaporeRules", "UnsupportedConfigurationError"]
+__all__ = ["SingaporeRules", "UnsupportedConfigurationError", "rules_for_version"]

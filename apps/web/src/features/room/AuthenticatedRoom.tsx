@@ -9,6 +9,8 @@ import {
 } from "../../lib/session";
 import type { PublicRoomView } from "../../lib/types";
 import { LobbyView } from "./lobby/LobbyView";
+import { PreparingTable } from "./table/PreparingTable";
+import { TableView } from "./table/TableView";
 import { useAuthoritativeRoomView } from "./useAuthoritativeRoomView";
 import { useInviteCapability } from "./useInviteCapability";
 import { useRoomCommands } from "./useRoomCommands";
@@ -85,6 +87,28 @@ export function AuthenticatedRoom({
   });
 
   if (!view) return <LoadingRoom error={connection.error} />;
+
+  if (
+    view.game?.status === "PENDING_SETUP" &&
+    view.rulesetVersion !== "0.1.0"
+  ) {
+    return <PreparingTable connectionStatus={connection.status} />;
+  }
+
+  if (view.game?.status === "ACTIVE" || view.game?.status === "FINISHED") {
+    return (
+      <TableView
+        view={view}
+        connection={connection}
+        roomWarning={roomWarning}
+        operationsByActionId={commands.operationsByActionId}
+        recoverableOperations={commands.recoverableOperations}
+        feedback={commands.feedback}
+        onRunAction={commands.runAction}
+        onRetryAction={commands.retryAction}
+      />
+    );
+  }
 
   return (
     <LobbyView

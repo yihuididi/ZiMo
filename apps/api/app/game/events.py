@@ -38,6 +38,19 @@ class TileDiscarded(GameModel):
     discard_sequence: int = Field(ge=1)
 
 
+class BonusExposed(GameModel):
+    type: Literal["bonusExposed"] = "bonusExposed"
+    seat_id: SeatId = Field(min_length=1)
+    tile: PhysicalTile
+    initial: bool = False
+
+
+class DiscardWindowResolved(GameModel):
+    type: Literal["discardWindowResolved"] = "discardWindowResolved"
+    window_id: WindowId = Field(min_length=1)
+    discard_sequence: int = Field(ge=1)
+
+
 class ClaimSubmitted(GameModel):
     type: Literal["claimSubmitted"] = "claimSubmitted"
     window_id: WindowId = Field(min_length=1)
@@ -72,6 +85,8 @@ DomainEvent = Annotated[
     HandSetupCompleted
     | TileDrawn
     | TileDiscarded
+    | BonusExposed
+    | DiscardWindowResolved
     | ClaimSubmitted
     | MeldDeclared
     | KongDeclared
