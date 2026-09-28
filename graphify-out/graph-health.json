@@ -1,0 +1,214 @@
+{
+  "node_count": 2636,
+  "unverified_node_count": 0,
+  "raw_edge_count": 8700,
+  "non_object_edges": 0,
+  "missing_endpoint_edges": 0,
+  "dangling_endpoint_edges": 215,
+  "external_reference_edges": 15,
+  "self_loop_edges": 30,
+  "valid_candidate_edges": 8470,
+  "exact_duplicate_edges": 0,
+  "directed_unique_endpoint_pairs": 8001,
+  "directed_same_endpoint_collapsed_edges": 469,
+  "undirected_unique_endpoint_pairs": 7991,
+  "undirected_same_endpoint_collapsed_edges": 479,
+  "same_endpoint_group_count": 439,
+  "relation_variant_groups": 386,
+  "source_file_variant_groups": 0,
+  "source_location_variant_groups": 16,
+  "context_variant_groups": 47,
+  "post_build_graph_type": "Graph",
+  "post_build_node_count": 2682,
+  "post_build_edge_count": 8197,
+  "post_build_error": "",
+  "producer_suppression": {
+    "path": "/Users/tohyihui/.local/share/uv/tools/graphifyy/lib/python3.12/site-packages/graphify/extract.py",
+    "total_sites": 12,
+    "sites": [
+      {
+        "line": 1646,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids = {n[\"id\"] for n in nodes}"
+      },
+      {
+        "line": 2179,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids = {n[\"id\"] for n in nodes}"
+      },
+      {
+        "line": 2181,
+        "name": "seen_doc_refs",
+        "tuple_arity": 0,
+        "sample": "seen_doc_refs: set[str] = set()"
+      },
+      {
+        "line": 2551,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = {n[\"id\"] for n in nodes}"
+      },
+      {
+        "line": 2698,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids = {n.get(\"id\") for n in nodes}"
+      },
+      {
+        "line": 3424,
+        "name": "seen_keys",
+        "tuple_arity": 0,
+        "sample": "seen_keys: set[tuple] = set()"
+      },
+      {
+        "line": 3593,
+        "name": "seen_keys",
+        "tuple_arity": 0,
+        "sample": "seen_keys: set[tuple] = set()"
+      },
+      {
+        "line": 5669,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = set()"
+      },
+      {
+        "line": 5777,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = set()"
+      },
+      {
+        "line": 5856,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = set()"
+      },
+      {
+        "line": 6371,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = set()"
+      },
+      {
+        "line": 6372,
+        "name": "seen_edges",
+        "tuple_arity": 4,
+        "sample": "seen_edges: set[tuple[str, str, str, str | None]] = set()"
+      }
+    ],
+    "error": ""
+  },
+  "examples": [
+    {
+      "source": "agents_skills_impeccable_scripts_live_browser_sendevent",
+      "target": "agents_skills_impeccable_scripts_live_browser_sendevent_handlefailure",
+      "edge_count": 3,
+      "relations": [
+        "calls",
+        "contains",
+        "indirect_call"
+      ],
+      "source_files": [
+        ".agents/skills/impeccable/scripts/live-browser.js"
+      ],
+      "source_locations": [
+        "L7356",
+        "L7384",
+        "L7385"
+      ],
+      "contexts": [
+        "",
+        "argument",
+        "call"
+      ]
+    },
+    {
+      "source": "agents_skills_impeccable_scripts_live_browser",
+      "target": "agents_skills_impeccable_scripts_live_browser_init",
+      "edge_count": 3,
+      "relations": [
+        "calls",
+        "contains",
+        "indirect_call"
+      ],
+      "source_files": [
+        ".agents/skills/impeccable/scripts/live-browser.js"
+      ],
+      "source_locations": [
+        "L12937",
+        "L12986",
+        "L12988"
+      ],
+      "contexts": [
+        "",
+        "argument",
+        "call"
+      ]
+    },
+    {
+      "source": "agents_skills_impeccable_scripts_modern_screenshot_umd",
+      "target": "agents_skills_impeccable_scripts_modern_screenshot_umd_q",
+      "edge_count": 3,
+      "relations": [
+        "calls",
+        "contains"
+      ],
+      "source_files": [
+        ".agents/skills/impeccable/scripts/modern-screenshot.umd.js"
+      ],
+      "source_locations": [
+        "L1",
+        "L14"
+      ],
+      "contexts": [
+        "",
+        "call"
+      ]
+    },
+    {
+      "source": "agents_skills_impeccable_scripts_modern_screenshot_umd_l",
+      "target": "agents_skills_impeccable_scripts_modern_screenshot_umd_l_l",
+      "edge_count": 3,
+      "relations": [
+        "calls",
+        "contains",
+        "indirect_call"
+      ],
+      "source_files": [
+        ".agents/skills/impeccable/scripts/modern-screenshot.umd.js"
+      ],
+      "source_locations": [
+        "L1"
+      ],
+      "contexts": [
+        "",
+        "argument",
+        "call"
+      ]
+    },
+    {
+      "source": "apps_api_app_game_engine_replacement_chain",
+      "target": "apps_api_app_game_model_physicaltile",
+      "edge_count": 3,
+      "relations": [
+        "references",
+        "uses"
+      ],
+      "source_files": [
+        "apps/api/app/game/engine.py"
+      ],
+      "source_locations": [
+        "L543",
+        "L545"
+      ],
+      "contexts": [
+        "",
+        "generic_arg",
+        "return_type"
+      ]
+    }
+  ]
+}
