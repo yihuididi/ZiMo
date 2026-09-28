@@ -1,99 +1,99 @@
 {
-  "node_count": 2636,
+  "node_count": 2520,
   "unverified_node_count": 0,
-  "raw_edge_count": 8700,
+  "raw_edge_count": 8998,
   "non_object_edges": 0,
   "missing_endpoint_edges": 0,
-  "dangling_endpoint_edges": 215,
+  "dangling_endpoint_edges": 219,
   "external_reference_edges": 15,
-  "self_loop_edges": 30,
-  "valid_candidate_edges": 8470,
+  "self_loop_edges": 28,
+  "valid_candidate_edges": 8764,
   "exact_duplicate_edges": 0,
-  "directed_unique_endpoint_pairs": 8001,
-  "directed_same_endpoint_collapsed_edges": 469,
-  "undirected_unique_endpoint_pairs": 7991,
-  "undirected_same_endpoint_collapsed_edges": 479,
-  "same_endpoint_group_count": 439,
-  "relation_variant_groups": 386,
+  "directed_unique_endpoint_pairs": 8271,
+  "directed_same_endpoint_collapsed_edges": 493,
+  "undirected_unique_endpoint_pairs": 8259,
+  "undirected_same_endpoint_collapsed_edges": 505,
+  "same_endpoint_group_count": 460,
+  "relation_variant_groups": 404,
   "source_file_variant_groups": 0,
   "source_location_variant_groups": 16,
-  "context_variant_groups": 47,
+  "context_variant_groups": 53,
   "post_build_graph_type": "Graph",
-  "post_build_node_count": 2682,
-  "post_build_edge_count": 8197,
+  "post_build_node_count": 2569,
+  "post_build_edge_count": 8470,
   "post_build_error": "",
   "producer_suppression": {
     "path": "/Users/tohyihui/.local/share/uv/tools/graphifyy/lib/python3.12/site-packages/graphify/extract.py",
     "total_sites": 12,
     "sites": [
       {
-        "line": 1646,
+        "line": 1651,
         "name": "seen_ids",
         "tuple_arity": 0,
         "sample": "seen_ids = {n[\"id\"] for n in nodes}"
       },
       {
-        "line": 2179,
+        "line": 2184,
         "name": "seen_ids",
         "tuple_arity": 0,
         "sample": "seen_ids = {n[\"id\"] for n in nodes}"
       },
       {
-        "line": 2181,
+        "line": 2186,
         "name": "seen_doc_refs",
         "tuple_arity": 0,
         "sample": "seen_doc_refs: set[str] = set()"
       },
       {
-        "line": 2551,
+        "line": 2556,
         "name": "seen_ids",
         "tuple_arity": 0,
         "sample": "seen_ids: set[str] = {n[\"id\"] for n in nodes}"
       },
       {
-        "line": 2698,
+        "line": 2703,
         "name": "seen_ids",
         "tuple_arity": 0,
         "sample": "seen_ids = {n.get(\"id\") for n in nodes}"
       },
       {
-        "line": 3424,
+        "line": 3429,
         "name": "seen_keys",
         "tuple_arity": 0,
         "sample": "seen_keys: set[tuple] = set()"
       },
       {
-        "line": 3593,
+        "line": 3598,
         "name": "seen_keys",
         "tuple_arity": 0,
         "sample": "seen_keys: set[tuple] = set()"
       },
       {
-        "line": 5669,
+        "line": 5674,
         "name": "seen_ids",
         "tuple_arity": 0,
         "sample": "seen_ids: set[str] = set()"
       },
       {
-        "line": 5777,
+        "line": 5782,
         "name": "seen_ids",
         "tuple_arity": 0,
         "sample": "seen_ids: set[str] = set()"
       },
       {
-        "line": 5856,
+        "line": 5861,
         "name": "seen_ids",
         "tuple_arity": 0,
         "sample": "seen_ids: set[str] = set()"
       },
       {
-        "line": 6371,
+        "line": 6376,
         "name": "seen_ids",
         "tuple_arity": 0,
         "sample": "seen_ids: set[str] = set()"
       },
       {
-        "line": 6372,
+        "line": 6377,
         "name": "seen_edges",
         "tuple_arity": 4,
         "sample": "seen_edges: set[tuple[str, str, str, str | None]] = set()"
@@ -190,19 +190,19 @@
       ]
     },
     {
-      "source": "apps_api_app_game_engine_replacement_chain",
-      "target": "apps_api_app_game_model_physicaltile",
+      "source": "apps_api_app_game_claims_winning_claim",
+      "target": "apps_api_app_game_model_pendingclaim",
       "edge_count": 3,
       "relations": [
         "references",
         "uses"
       ],
       "source_files": [
-        "apps/api/app/game/engine.py"
+        "apps/api/app/game/claims.py"
       ],
       "source_locations": [
-        "L543",
-        "L545"
+        "L27",
+        "L28"
       ],
       "contexts": [
         "",
