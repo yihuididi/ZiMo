@@ -2,39 +2,18 @@
 
 from __future__ import annotations
 
-import json
-
 from .model import RoomState
-from .rules import rules_for_version
+from .rules import rules_for_id
 
 
 def serialize_room_state(state: RoomState) -> str:
-    rules_for_version(state.ruleset_version).validate_snapshot(state)
+    rules_for_id(state.ruleset_id).validate_snapshot(state)
     return state.canonical_json()
 
 
 def deserialize_room_state(snapshot_json: str | bytes) -> RoomState:
-    """Parse a strict, version-checked canonical room snapshot."""
-
-    try:
-        value = json.loads(snapshot_json)
-    except (TypeError, ValueError):
-        # Preserve Pydantic's detailed malformed-JSON error for callers.
-        return RoomState.model_validate_json(snapshot_json, strict=True)
-    if (
-        isinstance(value, dict)
-        and type(value.get("stateSchemaVersion")) is int
-        and value.get("stateSchemaVersion") == 1
-    ):
-        match = value.get("match")
-        if isinstance(match, dict) and match.get("status") == "PENDING_SETUP":
-            raise ValueError("PENDING_SETUP is not valid in a schema-v1 snapshot")
-        value["stateSchemaVersion"] = 2
-        snapshot_json = json.dumps(
-            value, ensure_ascii=False, separators=(",", ":"), sort_keys=True
-        )
     state = RoomState.model_validate_json(snapshot_json, strict=True)
-    rules_for_version(state.ruleset_version).validate_snapshot(state)
+    rules_for_id(state.ruleset_id).validate_snapshot(state)
     return state
 
 

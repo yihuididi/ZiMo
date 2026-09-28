@@ -9,11 +9,6 @@ from pydantic import Field, model_validator
 from pydantic_core import core_schema
 
 from .base import GameModel
-from .capabilities import (
-    MILESTONE_3_RULESET_VERSION,
-    MILESTONE_4_RULESET_VERSION,
-    MILESTONE_3_STATE_SCHEMA_VERSION,
-)
 from .config import GameConfig
 
 
@@ -820,9 +815,7 @@ class MatchState(GameModel):
 
 class RoomState(GameModel):
     room_id: RoomId = Field(min_length=1)
-    ruleset_id: Literal["singapore"] = "singapore"
-    ruleset_version: Literal["0.1.0", "0.2.0", "0.3.0"] = "0.1.0"
-    state_schema_version: Literal[2, 3, 4] = 2
+    ruleset_id: str = Field(default="singapore", min_length=1)
     revision: int = Field(default=0, ge=0)
     config: GameConfig = Field(default_factory=GameConfig)
     status: RoomStatus = RoomStatus.CREATED
@@ -835,40 +828,19 @@ class RoomState(GameModel):
 
     def canonical_data(self) -> dict[str, Any]:
         # ``model_copy(update=...)`` intentionally skips Pydantic validation.
-        # Recheck the capability gate at the persistence serialization boundary.
+        # Recheck the configuration gate at the persistence boundary.
         if self.config != GameConfig():
             raise ValueError(
                 "Singapore preview cannot serialize unsupported game configuration"
             )
         data = super().canonical_data()
-        # Keep byte-canonical legacy snapshots readable without rewriting them.
-        if (
-            self.ruleset_version != MILESTONE_4_RULESET_VERSION
-            and self.match is not None
-        ):
-            hand = data["match"]["currentHand"]
-            if hand is not None:
-                hand["phase"].pop("openingRevision", None)
-                for player in hand["playerHands"]:
-                    player.pop("passedPongFaces", None)
-                    player.pop("lastDiscardFace", None)
-                    for meld in player["melds"]:
-                        meld.pop("kongKind", None)
         return data
 
     @model_validator(mode="after")
     def validate_room(self) -> "RoomState":
-        if (self.ruleset_version == MILESTONE_4_RULESET_VERSION) != (
-            self.state_schema_version == 4
-        ):
-            raise ValueError("milestone four requires state schema 4")
-        if (
-            self.ruleset_version == MILESTONE_3_RULESET_VERSION
-            and self.state_schema_version != MILESTONE_3_STATE_SCHEMA_VERSION
-        ):
-            raise ValueError(
-                "state schema version does not match the pinned ruleset version"
-            )
+        from .rules import rules_for_id
+
+        rules_for_id(self.ruleset_id)
         if self.config != GameConfig():
             raise ValueError(
                 "Singapore preview does not permit non-default game configuration"
@@ -942,11 +914,6 @@ class RoomState(GameModel):
         } != set(seat_ids):
             raise ValueError("match seats must match the room's stable seats")
         if self.pending_deadline is not None:
-            if self.ruleset_version not in {
-                MILESTONE_3_RULESET_VERSION,
-                MILESTONE_4_RULESET_VERSION,
-            }:
-                raise ValueError("only the draw/discard preview may have a deadline")
             hand = self.match.current_hand if self.match is not None else None
             if (
                 hand is None

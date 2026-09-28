@@ -1,73 +1,19 @@
-"""Ruleset-versioned public capability metadata."""
+"""Public capabilities of the Singapore game."""
 
 from __future__ import annotations
 
 from typing import Literal, TypeAlias
 
-
-MILESTONE_2_RULESET_VERSION = "0.1.0"
-MILESTONE_3_RULESET_VERSION = "0.2.0"
-MILESTONE_3_STATE_SCHEMA_VERSION = 3
-
-MILESTONE_4_RULESET_VERSION = "0.3.0"
-MILESTONE_4_STATE_SCHEMA_VERSION = 4
-
 RoomCapability: TypeAlias = Literal[
-    "multiplayerLobby",
-    "roomEvents",
-    "hibernatingWebSockets",
-    "drawDiscard",
-    "bonusTiles",
-    "discardWindow",
-    "chow",
-    "pong",
-    "kong3",
-    "kong4",
+    "multiplayerLobby", "roomEvents", "hibernatingWebSockets",
+    "drawDiscard", "bonusTiles", "discardWindow", "chow", "pong",
+    "kong3", "kong4",
 ]
 
-MILESTONE_2_CAPABILITIES: tuple[RoomCapability, ...] = (
-    "multiplayerLobby",
-    "roomEvents",
-    "hibernatingWebSockets",
-)
-MILESTONE_3_CAPABILITIES: tuple[RoomCapability, ...] = (
-    *MILESTONE_2_CAPABILITIES,
-    "drawDiscard",
-    "bonusTiles",
-    "discardWindow",
+ROOM_CAPABILITIES: tuple[RoomCapability, ...] = (
+    "multiplayerLobby", "roomEvents", "hibernatingWebSockets",
+    "drawDiscard", "bonusTiles", "discardWindow", "chow", "pong",
+    "kong3", "kong4",
 )
 
-
-MILESTONE_4_CAPABILITIES: tuple[RoomCapability, ...] = (
-    *MILESTONE_3_CAPABILITIES,
-    "chow",
-    "pong",
-    "kong3",
-    "kong4",
-)
-
-
-def capabilities_for_ruleset_version(
-    ruleset_version: str,
-) -> tuple[RoomCapability, ...]:
-    if ruleset_version == MILESTONE_4_RULESET_VERSION:
-        return MILESTONE_4_CAPABILITIES
-    if ruleset_version == MILESTONE_2_RULESET_VERSION:
-        return MILESTONE_2_CAPABILITIES
-    if ruleset_version == MILESTONE_3_RULESET_VERSION:
-        return MILESTONE_3_CAPABILITIES
-    raise ValueError(f"unsupported Singapore ruleset version: {ruleset_version}")
-
-
-__all__ = [
-    "MILESTONE_4_CAPABILITIES",
-    "MILESTONE_4_RULESET_VERSION",
-    "MILESTONE_4_STATE_SCHEMA_VERSION",
-    "MILESTONE_2_CAPABILITIES",
-    "MILESTONE_2_RULESET_VERSION",
-    "MILESTONE_3_CAPABILITIES",
-    "MILESTONE_3_RULESET_VERSION",
-    "MILESTONE_3_STATE_SCHEMA_VERSION",
-    "RoomCapability",
-    "capabilities_for_ruleset_version",
-]
+__all__ = ["RoomCapability", "ROOM_CAPABILITIES"]

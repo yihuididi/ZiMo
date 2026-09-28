@@ -9,8 +9,6 @@ if "." in (__package__ or ""):
     from ..game import (
         ExternalSeatController,
         GameConfig,
-        MILESTONE_4_RULESET_VERSION,
-        MILESTONE_4_STATE_SCHEMA_VERSION,
         MatchState,
         PlayerId,
         PlayerRole,
@@ -20,14 +18,13 @@ if "." in (__package__ or ""):
         RoomStatus,
         SeatId,
         SeatState,
+        rules_for_id,
         standard_seats,
     )
 else:  # pragma: no cover - Pyodide Worker module loading
     from game import (
         ExternalSeatController,
         GameConfig,
-        MILESTONE_4_RULESET_VERSION,
-        MILESTONE_4_STATE_SCHEMA_VERSION,
         MatchState,
         PlayerId,
         PlayerRole,
@@ -37,6 +34,7 @@ else:  # pragma: no cover - Pyodide Worker module loading
         RoomStatus,
         SeatId,
         SeatState,
+        rules_for_id,
         standard_seats,
     )
 
@@ -77,8 +75,10 @@ def create_lobby_room(
     display_name: str,
     *,
     now_ms: int,
+    ruleset_id: str = "singapore",
 ) -> RoomState:
     _require_timestamp(now_ms)
+    rules = rules_for_id(ruleset_id)
     room_id = room_id if isinstance(room_id, RoomId) else RoomId(room_id)
     player_id = (
         host_player_id
@@ -95,8 +95,8 @@ def create_lobby_room(
     )
     return RoomState(
         room_id=room_id,
-        ruleset_version=MILESTONE_4_RULESET_VERSION,
-        state_schema_version=MILESTONE_4_STATE_SCHEMA_VERSION,
+        ruleset_id=ruleset_id,
+        config=rules.default_config(),
         revision=0,
         status=RoomStatus.WAITING_FOR_PLAYERS,
         seats=tuple(seats),

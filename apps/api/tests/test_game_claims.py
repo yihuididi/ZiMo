@@ -17,7 +17,7 @@ from app.game import (
     DiscardClaimsPhase,
     FinalTileDecisionPhase,
     AwaitingDrawPhase,
-    MilestoneFourEngine,
+    SingaporeGameEngine,
     DeterministicRandomSource,
     RandomBotPolicy,
     RoomState,
@@ -26,16 +26,16 @@ from app.game import (
     PendingDeadline,
     build_seat_observation,
     build_public_room_view,
-    validate_milestone_four_room,
+    validate_room,
     finalize_completed_preview,
     serialize_room_state,
     deserialize_room_state,
     IllegalGameActionError,
 )
 from app.game.claims import winning_claim
-from app.game.milestone4 import _updated
+from app.game.singapore_game import _updated
 from app.game.engine import _room_with_hand
-from test_game_milestone3 import (
+from test_game_setup import (
     preview_room,
     IdentityRandomSource,
     AllBonusChainRandomSource,
@@ -78,10 +78,8 @@ class ArrangedDeck(IdentityRandomSource):
 
 
 def started(rng=None):
-    room = preview_room(human_at_zero=True).model_copy(
-        update={"ruleset_version": "0.3.0", "state_schema_version": 4}
-    )
-    engine = MilestoneFourEngine(rng or ArrangedDeck())
+    room = preview_room(human_at_zero=True)
+    engine = SingaporeGameEngine(rng or ArrangedDeck())
     return engine, engine.setup_match(room).state
 
 
@@ -241,7 +239,7 @@ class ClaimTests(unittest.TestCase):
         self.assertIsNotNone(player.drawn_tile)
         self.assertEqual(len(player.concealed_tiles), 10)
         self.assertIn(state.match.current_hand.discards[0].tile, player.melds[0].tiles)
-        validate_milestone_four_room(state)
+        validate_room(state)
 
     def test_multiple_concealed_kongs_and_unconsumed_draw_buffer(self):
         engine, state = started(ArrangedDeck({0: [1] * 4 + [2] * 4}, draw=5))
@@ -323,7 +321,7 @@ class ClaimTests(unittest.TestCase):
         ).state
         hand = state.match.current_hand
         self.assertIsInstance(hand.phase, FinalTileDecisionPhase)
-        validate_milestone_four_room(state)
+        validate_room(state)
         self.assertEqual(deserialize_room_state(serialize_room_state(state)), state)
         for action in engine.legal_actions(state, SeatId("seat-0")):
             result = engine.transition(state, action)
@@ -340,7 +338,7 @@ class ClaimTests(unittest.TestCase):
             rng = DeterministicRandomSource(f"policy-{seed}")
             for _ in range(700):
                 hand = state.match.current_hand
-                validate_milestone_four_room(state)
+                validate_room(state)
                 if isinstance(hand.phase, CompletePhase):
                     final = finalize_completed_preview(state, completed_at_ms=10000)
                     self.assertEqual(

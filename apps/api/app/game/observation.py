@@ -8,9 +8,8 @@ from pydantic import Field
 
 from .base import GameModel
 from .capabilities import (
-    MILESTONE_2_CAPABILITIES,
+    ROOM_CAPABILITIES,
     RoomCapability,
-    capabilities_for_ruleset_version,
 )
 from .config import GameConfig
 from .model import (
@@ -127,9 +126,7 @@ class PlayerObservation(GameModel):
     revision: int = Field(ge=0)
     room_status: RoomStatus
     ruleset_id: str
-    ruleset_version: str
-    state_schema_version: int = Field(ge=1)
-    capabilities: tuple[RoomCapability, ...] = MILESTONE_2_CAPABILITIES
+    capabilities: tuple[RoomCapability, ...] = ROOM_CAPABILITIES
     config: GameConfig
     viewer_seat_id: SeatId
     viewer_player_id: PlayerId | None = None
@@ -228,7 +225,7 @@ def build_seat_observation(
     ):
         raise ObservationError("viewer player does not control the viewer seat")
     selected_capabilities = (
-        capabilities_for_ruleset_version(room.ruleset_version)
+        ROOM_CAPABILITIES
         if capabilities is None
         else capabilities
     )
@@ -319,8 +316,6 @@ def build_seat_observation(
         revision=room.revision,
         room_status=room.status,
         ruleset_id=room.ruleset_id,
-        ruleset_version=room.ruleset_version,
-        state_schema_version=room.state_schema_version,
         capabilities=selected_capabilities,
         config=room.config,
         viewer_seat_id=viewer_seat_id,

@@ -5,9 +5,9 @@ import unittest
 
 from app.room import RoomOrchestrator, RoomServiceError
 from app.persistence import RoomRepository
-from app.game import DiscardClaimsPhase, MilestoneFourEngine, SeatId
+from app.game import DiscardClaimsPhase, SingaporeGameEngine, SeatId
 from test_room_gameplay import MutableClock, DeterministicCapabilities, DeterministicIds
-from test_game_milestone4 import ArrangedDeck
+from test_game_claims import ArrangedDeck
 
 
 class MultiplayerClaimTests(unittest.TestCase):

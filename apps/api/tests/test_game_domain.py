@@ -26,7 +26,7 @@ from app.game import (
     Draw,
     ExternalSeatController,
     GameConfig,
-    GameplayUnavailableError,
+    ROOM_CAPABILITIES,
     HandCompleted,
     HandId,
     HandOutcome,
@@ -41,8 +41,6 @@ from app.game import (
     KongRobberyPhase,
     MatchId,
     MatchState,
-    MILESTONE_2_CAPABILITIES,
-    MILESTONE_3_CAPABILITIES,
     MeldDeclared,
     MeldKind,
     MeldState,
@@ -87,7 +85,6 @@ from app.game import (
     parse_domain_effect_json,
     parse_domain_event_json,
     standard_seats,
-    transition,
 )
 
 
@@ -143,23 +140,15 @@ class GameConfigTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValidationError):
                 GameConfig.model_validate(value)
 
-    def test_singapore_metadata_and_capability_gate(self) -> None:
+    def test_singapore_metadata_and_capabilities(self) -> None:
         rules = SingaporeRules()
         self.assertEqual(rules.ruleset_id, "singapore")
-        self.assertEqual(rules.ruleset_version, "0.3.0")
-        self.assertEqual(rules.state_schema_version, 4)
         self.assertEqual(rules.seat_count, 4)
         self.assertEqual(rules.tile_count, 148)
         self.assertEqual(rules.reserve_tile_count, 15)
         self.assertEqual(rules.claim_window_ms, 3000)
-        self.assertEqual(rules.capabilities, (*MILESTONE_3_CAPABILITIES, "chow", "pong", "kong3", "kong4"))
+        self.assertEqual(rules.capabilities, ROOM_CAPABILITIES)
         self.assertEqual(rules.configurable_fields, ())
-
-        legacy = SingaporeRules(
-            ruleset_version="0.1.0",
-            state_schema_version=3,
-        )
-        self.assertEqual(legacy.capabilities, MILESTONE_2_CAPABILITIES)
 
     def test_rules_reject_future_config_until_a_capability_enables_it(self) -> None:
         rules = SingaporeRules()
@@ -176,7 +165,7 @@ class GameConfigTests(unittest.TestCase):
                 }
             )
 
-    def test_milestone_capabilities_cannot_be_overridden(self) -> None:
+    def test_capabilities_cannot_be_overridden(self) -> None:
         with self.assertRaises(ValidationError):
             SingaporeRules.model_validate({"capabilities": ("draw",)})
         with self.assertRaises(ValidationError):
@@ -784,53 +773,22 @@ class SnapshotAndEngineTests(unittest.TestCase):
 
     def test_canonical_camel_case_json_round_trip(self) -> None:
         encoded = self.room.canonical_json()
-        self.assertEqual(encoded, self.room.canonical_json())
         self.assertIn('"roomId":"room-1"', encoded)
-        self.assertIn('"stateSchemaVersion":2', encoded)
-        self.assertNotIn("room_id", encoded)
+        self.assertNotIn('"rulesetVersion"', encoded)
+        self.assertNotIn('"stateSchemaVersion"', encoded)
         self.assertEqual(deserialize_room_state(encoded), self.room)
-        self.assertEqual(deserialize_room_state(encoded).canonical_json(), encoded)
         self.assertEqual(list(json.loads(encoded)), sorted(json.loads(encoded)))
 
-    def test_schema_v1_snapshot_upgrades_without_changing_revision(self) -> None:
+    def test_rejects_old_snapshot_versions(self) -> None:
         data = json.loads(self.room.canonical_json())
-        data["stateSchemaVersion"] = 1
-        data["revision"] = 7
-        upgraded = deserialize_room_state(json.dumps(data))
-        self.assertEqual(upgraded.state_schema_version, 2)
-        self.assertEqual(upgraded.revision, 7)
-        self.assertIn('"stateSchemaVersion":2', upgraded.canonical_json())
-
-    def test_schema_boolean_is_not_mistaken_for_v1(self) -> None:
-        data = json.loads(self.room.canonical_json())
-        data["stateSchemaVersion"] = True
-        with self.assertRaises(ValidationError):
-            deserialize_room_state(json.dumps(data))
-
-    def test_rejects_wrong_ruleset_or_schema_version(self) -> None:
-        data = json.loads(self.room.canonical_json())
-        for key, bad_value in (
-            ("rulesetId", "other"),
-            ("rulesetVersion", "9.9.9"),
-            ("stateSchemaVersion", 4),
-        ):
-            changed = {**data, key: bad_value}
+        for key, value in (("rulesetVersion", "0.2.0"), ("stateSchemaVersion", 3)):
             with self.subTest(key=key), self.assertRaises(ValidationError):
-                deserialize_room_state(json.dumps(changed))
+                deserialize_room_state(json.dumps({**data, key: value}))
 
-        migrated_legacy = deserialize_room_state(
-            json.dumps({**data, "stateSchemaVersion": 3})
-        )
-        self.assertEqual(migrated_legacy.ruleset_version, "0.1.0")
-        self.assertEqual(migrated_legacy.state_schema_version, 3)
-
-    def test_non_playable_engine_has_no_actions_and_typed_rejection(self) -> None:
-        self.assertEqual(legal_actions(self.room, SeatId("seat-0")), ())
-        action = Draw(seat_id=SeatId("seat-0"))
-        with self.assertRaises(GameplayUnavailableError) as raised:
-            transition(self.room, action)
-        self.assertEqual(raised.exception.code, "GAMEPLAY_UNAVAILABLE")
-        self.assertEqual(raised.exception.action_type, "draw")
+    def test_rejects_wrong_ruleset(self) -> None:
+        data = json.loads(self.room.canonical_json())
+        with self.assertRaises(ValidationError):
+            deserialize_room_state(json.dumps({**data, "rulesetId": "other"}))
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -88,10 +88,7 @@ export function AuthenticatedRoom({
 
   if (!view) return <LoadingRoom error={connection.error} />;
 
-  if (
-    view.game?.status === "PENDING_SETUP" &&
-    view.rulesetVersion !== "0.1.0"
-  ) {
+  if (view.game?.status === "PENDING_SETUP") {
     return <PreparingTable connectionStatus={connection.status} />;
   }
 

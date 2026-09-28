@@ -4,11 +4,9 @@ import WebSocket from "ws";
 
 const FRONTEND_ORIGIN = "http://localhost:5173";
 const HOSTILE_ORIGIN = "https://hostile.example";
-const ROOM_NAME = "milestone-1-reconstruction";
+const ROOM_NAME = "room-reconstruction";
 const SNAPSHOT_JSON = JSON.stringify({
   roomId: ROOM_NAME,
-  rulesetVersion: "0.1.0",
-  stateSchemaVersion: 3,
   pendingDeadline: null,
   seats: [0, 1, 2, 3].map((slot) => ({
     seatId: `seat-${slot}`,
@@ -264,14 +262,12 @@ async function createRoom(displayName = "Host") {
     view: expect.any(Object),
   });
   expect(created.view).toMatchObject({
-    apiVersion: "1",
+    apiVersion: "2",
     roomId: created.roomId,
     viewerPlayerId: created.playerId,
     revision: 0,
     presenceVersion: 1,
     rulesetId: "singapore",
-    rulesetVersion: "0.3.0",
-    stateSchemaVersion: 4,
     capabilities: [
       "multiplayerLobby",
       "roomEvents",
@@ -542,7 +538,7 @@ async function expectSocketRejected(
   return result;
 }
 
-async function initializeFoundationRoom(snapshotJson) {
+async function initializeTestRoom(snapshotJson) {
   const response = await probe.fetch(
     `http://probe.invalid/initialize?room=${encodeURIComponent(ROOM_NAME)}`,
     { method: "POST", body: snapshotJson },
@@ -553,7 +549,7 @@ async function initializeFoundationRoom(snapshotJson) {
   return response.text();
 }
 
-async function loadFoundationRoom() {
+async function loadTestRoom() {
   const response = await probe.fetch(
     `http://probe.invalid/load?room=${encodeURIComponent(ROOM_NAME)}`,
   );
@@ -592,7 +588,7 @@ async function probeRoomRpc(roomName, pathname, body) {
   return response.json();
 }
 
-describe("Milestone 1 foundation remains compatible", () => {
+describe("Room snapshot reconstruction", () => {
   it("keeps the health surface while exposing only native room IDs", async () => {
     const response = await harness.fetch("/health");
     expect(response.status).toBe(200);
@@ -607,19 +603,17 @@ describe("Milestone 1 foundation remains compatible", () => {
     await expectApiError(roomResponse, 404);
   });
 
-  it("reconstructs the schema-v3 canonical room after eviction", async () => {
-    await expect(loadFoundationRoom()).resolves.toBeNull();
+  it("reconstructs the canonical room after eviction", async () => {
+    await expect(loadTestRoom()).resolves.toBeNull();
 
-    const canonicalSnapshot = await initializeFoundationRoom(SNAPSHOT_JSON);
+    const canonicalSnapshot = await initializeTestRoom(SNAPSHOT_JSON);
     expect(JSON.parse(canonicalSnapshot)).toMatchObject({
       roomId: ROOM_NAME,
       revision: 0,
       rulesetId: "singapore",
-      rulesetVersion: "0.1.0",
-      stateSchemaVersion: 3,
-      pendingDeadline: null,
+              pendingDeadline: null,
     });
-    await expect(loadFoundationRoom()).resolves.toBe(canonicalSnapshot);
+    await expect(loadTestRoom()).resolves.toBe(canonicalSnapshot);
 
     await expect(testRpc("/test/tables")).resolves.toEqual([
       "_sql_schema_migrations",
@@ -633,7 +627,7 @@ describe("Milestone 1 foundation remains compatible", () => {
       "socket_tickets",
     ]);
     await expect(testRpc("/test/counts")).resolves.toEqual({
-      _sql_schema_migrations: 4,
+      _sql_schema_migrations: 1,
       events: 0,
       player_presence: 0,
       players: 0,
@@ -645,7 +639,7 @@ describe("Milestone 1 foundation remains compatible", () => {
     });
 
     await expect(testRpc("/test/seed-auxiliary", "POST")).resolves.toEqual({
-      _sql_schema_migrations: 4,
+      _sql_schema_migrations: 1,
       events: 1,
       player_presence: 0,
       players: 1,
@@ -656,7 +650,7 @@ describe("Milestone 1 foundation remains compatible", () => {
       socket_tickets: 1,
     });
     await expect(testRpc("/test/clear-auxiliary", "POST")).resolves.toEqual({
-      _sql_schema_migrations: 4,
+      _sql_schema_migrations: 1,
       events: 0,
       player_presence: 0,
       players: 0,
@@ -671,11 +665,11 @@ describe("Milestone 1 foundation remains compatible", () => {
       runtimeWorker.listDurableObjectIds("GAME_ROOM"),
     ).resolves.toHaveLength(1);
     await runtimeWorker.evictDurableObject("GAME_ROOM", { name: ROOM_NAME });
-    await expect(loadFoundationRoom()).resolves.toBe(canonicalSnapshot);
+    await expect(loadTestRoom()).resolves.toBe(canonicalSnapshot);
   });
 });
 
-describe("Milestone 3 room HTTP API", () => {
+describe("Room HTTP API", () => {
   it("enforces strict input, native IDs, no-store, and exact-origin CORS", async () => {
     const strictCreate = await roomFetch("/rooms", {
       method: "POST",
@@ -1249,7 +1243,7 @@ describe("Milestone 3 room HTTP API", () => {
   });
 });
 
-describe("Milestone 3 durable gameplay alarms", () => {
+describe("Durable gameplay alarms", () => {
   it("reconstructs a pending discard window and advances at 2999/3000 exactly once", async () => {
     const roomName = `gameplay-alarm-${crypto.randomUUID()}`;
     const createdEnvelope = await probeRoomRpc(
@@ -1382,7 +1376,7 @@ describe("Milestone 3 durable gameplay alarms", () => {
   });
 });
 
-describe("Milestone 2 hibernating WebSockets", () => {
+describe("Hibernating WebSockets", () => {
   it("uses origin-checked, 30-second, single-use ticket subprotocols", async () => {
     const host = await createRoom("Socket Host");
     const firstTicket = await issueSocketTicket(host.roomId, host.playerToken);
@@ -1963,7 +1957,7 @@ describe("Milestone 2 hibernating WebSockets", () => {
   });
 });
 
-describe("Milestone 2 durable presence alarms", () => {
+describe("Durable presence alarms", () => {
   it("reconciles a hibernated socket batch by durable join order", async () => {
     const roomName = `presence-reconcile-${crypto.randomUUID()}`;
     const createdEnvelope = await probeRoomRpc(

@@ -14,24 +14,9 @@ from .actions import (
     Pong,
     parse_domain_action_json,
 )
-from .milestone4 import (
-    MilestoneFourEngine,
-    VersionedPreviewEngine,
-    validate_milestone_four_room,
-)
+from .singapore_game import SingaporeGameEngine, validate_room
 from .base import GameModel, canonical_json
-from .capabilities import (
-    MILESTONE_2_CAPABILITIES,
-    MILESTONE_2_RULESET_VERSION,
-    MILESTONE_4_CAPABILITIES,
-    MILESTONE_4_RULESET_VERSION,
-    MILESTONE_4_STATE_SCHEMA_VERSION,
-    MILESTONE_3_CAPABILITIES,
-    MILESTONE_3_RULESET_VERSION,
-    MILESTONE_3_STATE_SCHEMA_VERSION,
-    RoomCapability,
-    capabilities_for_ruleset_version,
-)
+from .capabilities import ROOM_CAPABILITIES, RoomCapability
 from .config import GameConfig
 from .controllers import (
     AutomatedPolicy,
@@ -51,20 +36,15 @@ from .effects import (
 )
 from .engine import (
     MAX_AUTOMATED_CONTINUATIONS,
-    MILESTONE_1_CAPABILITIES,
     GameEngine,
-    GameplayUnavailableError,
     IllegalGameActionError,
     InvalidGameStateError,
-    MilestoneOneEngine,
-    MilestoneThreeEngine,
     ObservationBuilder,
     ProjectionBuilder,
     TransitionResult,
     finalize_completed_preview,
     legal_actions,
     transition,
-    validate_milestone_three_room,
 )
 from .events import (
     BonusExposed,
@@ -167,7 +147,7 @@ from .public import (
     project_public_meld,
     project_public_tile,
 )
-from .rules import SingaporeRules, UnsupportedConfigurationError, rules_for_version
+from .rules import GameRules, SingaporeRules, UnsupportedConfigurationError, rules_for_id
 from .runtime import (
     Clock,
     DeterministicRandomSource,
@@ -195,12 +175,6 @@ from .tiles import (
 )
 
 __all__ = [
-    "MilestoneFourEngine",
-    "VersionedPreviewEngine",
-    "validate_milestone_four_room",
-    "MILESTONE_4_CAPABILITIES",
-    "MILESTONE_4_RULESET_VERSION",
-    "MILESTONE_4_STATE_SCHEMA_VERSION",
     "FinalTileDecisionPhase",
     "FinishHand",
     "ANIMAL_VALUES",
@@ -238,7 +212,7 @@ __all__ = [
     "GameConfig",
     "GameEngine",
     "GameModel",
-    "GameplayUnavailableError",
+    "GameRules",
     "IllegalGameActionError",
     "InvalidGameStateError",
     "HandCompleted",
@@ -253,12 +227,6 @@ __all__ = [
     "KongKind",
     "KongReplacementPhase",
     "KongRobberyPhase",
-    "MILESTONE_1_CAPABILITIES",
-    "MILESTONE_2_CAPABILITIES",
-    "MILESTONE_2_RULESET_VERSION",
-    "MILESTONE_3_CAPABILITIES",
-    "MILESTONE_3_RULESET_VERSION",
-    "MILESTONE_3_STATE_SCHEMA_VERSION",
     "MAX_AUTOMATED_CONTINUATIONS",
     "MatchCompletionRequested",
     "MatchId",
@@ -269,8 +237,6 @@ __all__ = [
     "MeldDeclared",
     "MeldKind",
     "MeldState",
-    "MilestoneOneEngine",
-    "MilestoneThreeEngine",
     "NoLegalActionsError",
     "ObservationBuilder",
     "ObservationError",
@@ -307,6 +273,9 @@ __all__ = [
     "RandomSource",
     "RoomId",
     "RoomCapability",
+    "ROOM_CAPABILITIES",
+    "SingaporeGameEngine",
+    "validate_room",
     "RoomState",
     "RoomStatus",
     "SeatBalance",
@@ -342,7 +311,6 @@ __all__ = [
     "canonical_physical_deck",
     "canonical_tile_faces",
     "canonicalize_room_snapshot",
-    "capabilities_for_ruleset_version",
     "choose_automated_action",
     "deserialize_room_state",
     "finalize_completed_preview",
@@ -355,11 +323,10 @@ __all__ = [
     "project_public_discard",
     "project_public_meld",
     "project_public_tile",
-    "rules_for_version",
     "serialize_room_state",
+    "rules_for_id",
     "sort_playable_tiles",
     "standard_seats",
     "tile_sort_key",
     "transition",
-    "validate_milestone_three_room",
 ]

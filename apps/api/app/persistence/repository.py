@@ -61,8 +61,6 @@ from .records import (
 from .schema import (
     application_table_names as _application_table_names,
     initialize_schema as _initialize_schema,
-    upgrade_room_snapshots_to_v2 as _upgrade_room_snapshots_to_v2,
-    upgrade_room_snapshots_to_v3 as _upgrade_room_snapshots_to_v3,
 )
 from .sql import (
     CloudflareSqlExecutor,
@@ -108,20 +106,10 @@ class RoomRepository:
     def from_sqlite(cls, connection: Any) -> "RoomRepository":
         return cls(SQLiteSqlExecutor(connection))
 
-    def initialize_schema(self, *, applied_at_ms: int | None = None) -> None:
-        """Apply all application SQL migrations exactly once."""
+    def initialize_schema(self, *, applied_at_ms: int | None = None) -> bool:
+        """Create the schema, returning whether an older room was reset."""
 
-        _initialize_schema(self._executor, applied_at_ms=applied_at_ms)
-
-    def _upgrade_room_snapshots_to_v2(self) -> None:
-        """Rewrite v1 room JSON canonically while preserving history."""
-
-        _upgrade_room_snapshots_to_v2(self._executor)
-
-    def _upgrade_room_snapshots_to_v3(self) -> None:
-        """Add persisted deadline metadata without changing ruleset/revision."""
-
-        _upgrade_room_snapshots_to_v3(self._executor)
+        return _initialize_schema(self._executor, applied_at_ms=applied_at_ms)
 
     def _application_table_names(self) -> set[str]:
         return _application_table_names(self._executor)
@@ -253,8 +241,6 @@ class RoomRepository:
             immutable_fields = (
                 "room_id",
                 "ruleset_id",
-                "ruleset_version",
-                "state_schema_version",
                 "created_at_ms",
             )
             changed_fields = [
@@ -331,8 +317,6 @@ class RoomRepository:
                 UPDATE room_state
                 SET snapshot_json = ?,
                     ruleset_id = ?,
-                    ruleset_version = ?,
-                    state_schema_version = ?,
                     revision = ?,
                     config_json = ?,
                     created_at_ms = ?,
@@ -341,8 +325,6 @@ class RoomRepository:
                 """,
                 record.snapshot_json,
                 record.ruleset_id,
-                record.ruleset_version,
-                record.state_schema_version,
                 record.revision,
                 record.config_json,
                 record.created_at_ms,
@@ -892,7 +874,7 @@ class RoomRepository:
             self._executor.exec(
                 """
                 SELECT singleton_id, room_id, snapshot_json, ruleset_id,
-                       ruleset_version, state_schema_version, revision, config_json,
+                       revision, config_json,
                        created_at_ms, updated_at_ms
                 FROM room_state
                 WHERE singleton_id = ?
@@ -908,17 +890,15 @@ class RoomRepository:
         self._executor.exec(
             """
             INSERT INTO room_state (
-                singleton_id, room_id, snapshot_json, ruleset_id, ruleset_version,
-                state_schema_version, revision, config_json,
+                singleton_id, room_id, snapshot_json, ruleset_id,
+                revision, config_json,
                 created_at_ms, updated_at_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             _ROOM_STATE_SINGLETON_ID,
             record.room_id,
             record.snapshot_json,
             record.ruleset_id,
-            record.ruleset_version,
-            record.state_schema_version,
             record.revision,
             record.config_json,
             record.created_at_ms,

@@ -20,6 +20,9 @@ from app.game import (
     HandState,
     MatchId,
     MatchState,
+    MatchStatus,
+    SingaporeGameEngine,
+    DeterministicRandomSource,
     Payment,
     PendingClaim,
     PhysicalTile,
@@ -84,7 +87,6 @@ PRIVATE_SENTINEL = "PRIVATE-CONCEALED-SENTINEL"
 def room_state(*, revision: int = 0, updated_at_ms: int = 1_000) -> RoomState:
     return RoomState(
         room_id=RoomId("room-persistence-test"),
-        state_schema_version=3,
         revision=revision,
         seats=standard_seats(),
         created_at_ms=1_000,
@@ -115,7 +117,6 @@ def player_room_state(
     )
     return RoomState(
         room_id=RoomId("room-persistence-test"),
-        state_schema_version=3,
         revision=revision,
         status=RoomStatus.CREATED,
         seats=tuple(seats),
@@ -209,105 +210,40 @@ def tile(tile_id: str, rank: int) -> PhysicalTile:
 def rich_room_state() -> RoomState:
     seat_ids = tuple(SeatId(f"seat-{slot}") for slot in range(4))
     player = PlayerState(
-        player_id=PlayerId("player-1"),
-        display_name="East",
-        role=PlayerRole.HOST,
-        ready=True,
-        joined_at_ms=1_000,
+        player_id=PlayerId("player-1"), display_name="East",
+        role=PlayerRole.HOST, ready=True, joined_at_ms=1_000,
     )
     seats = (
         SeatState(
-            seat_id=seat_ids[0],
-            slot=0,
+            seat_id=seat_ids[0], slot=0,
             controller=ExternalSeatController(player_id=player.player_id),
             occupant_name="East",
         ),
         *(
             SeatState(
-                seat_id=seat_ids[slot],
-                slot=slot,
-                controller=AutomatedSeatController(
-                    policy_id=PolicyId(f"random-{slot}")
-                ),
+                seat_id=seat_ids[slot], slot=slot,
+                controller=AutomatedSeatController(policy_id=PolicyId("randomBot")),
                 occupant_name=f"Bot {slot}",
             )
             for slot in range(1, 4)
         ),
     )
-    payment = Payment(
-        sequence=1,
-        payer_seat_id=seat_ids[0],
-        recipient_seat_id=seat_ids[1],
-        amount=2,
-        reason="foundation payment sentinel",
-    )
-    completed_result = HandResult(
-        outcome=HandOutcome.WIN,
-        winner_seat_id=seat_ids[1],
-        provider_seat_id=seat_ids[0],
-        win_source=WinSource.DISCARD,
-        fan=2,
-        fan_awards=(FanAward(name="foundation fan sentinel", fan=2),),
-        payments=(payment,),
-    )
-    hand = HandState(
-        hand_id=HandId("hand-active"),
-        phase=DiscardClaimsPhase(
-            window_id=WindowId("window-claim-sentinel"),
-            discard_sequence=1,
-            eligible_seat_ids=(seat_ids[1], seat_ids[2]),
-        ),
-        wall=WallState(
-            live_tiles=(tile("wall-live-sentinel", 1),),
-            reserve_tiles=(tile("wall-reserve-sentinel", 2),),
-        ),
-        player_hands=(
-            PlayerHand(
-                seat_id=seat_ids[0],
-                concealed_tiles=(tile(PRIVATE_SENTINEL, 3),),
-                initial_tile_ids=(TileId(PRIVATE_SENTINEL),),
-            ),
-            PlayerHand(
-                seat_id=seat_ids[1],
-                concealed_tiles=(tile("south-concealed-sentinel", 4),),
-            ),
-            PlayerHand(seat_id=seat_ids[2]),
-            PlayerHand(seat_id=seat_ids[3]),
-        ),
-        discards=(
-            DiscardState(
-                sequence=1,
-                tile=tile("discard-public-sentinel", 5),
-                discarded_by_seat_id=seat_ids[0],
-            ),
-        ),
-        pending_claims=(
-            PendingClaim(
-                window_id=WindowId("window-claim-sentinel"),
-                seat_id=seat_ids[1],
-                kind=ClaimKind.PONG,
-                tile_ids=(TileId("claim-a-sentinel"), TileId("claim-b-sentinel")),
-            ),
-        ),
-        payments=(payment,),
-    )
-    match = MatchState(
-        match_id=MatchId("match-foundation"),
-        dealer_seat_id=seat_ids[0],
-        current_hand=hand,
-        hand_history=(completed_result,),
-        balances=tuple(SeatBalance(seat_id=seat_id) for seat_id in seat_ids),
-    )
-    return RoomState(
+    pending = RoomState(
         room_id=RoomId("room-persistence-test"),
-        state_schema_version=3,
         status=RoomStatus.IN_MATCH,
         seats=seats,
         players=(player,),
-        match=match,
+        match=MatchState(
+            match_id=MatchId("match-current"),
+            status=MatchStatus.PENDING_SETUP,
+            dealer_seat_id=None,
+            current_hand=None,
+            balances=tuple(SeatBalance(seat_id=seat_id) for seat_id in seat_ids),
+        ),
         created_at_ms=1_000,
         updated_at_ms=1_000,
     )
+    return SingaporeGameEngine(DeterministicRandomSource(3)).setup_match(pending).state
 
 
 @pytest.fixture
@@ -330,19 +266,6 @@ def scalar(connection: sqlite3.Connection, statement: str) -> object:
     return row[0]
 
 
-def downgrade_stored_snapshot_to_v2(connection: sqlite3.Connection) -> None:
-    """Simulate a canonical row written before deadline migration 4."""
-
-    value = json.loads(str(scalar(connection, "SELECT snapshot_json FROM room_state")))
-    value["stateSchemaVersion"] = 2
-    value.pop("pendingDeadline", None)
-    snapshot = json.dumps(value, separators=(",", ":"), sort_keys=True)
-    connection.execute(
-        "UPDATE room_state SET snapshot_json = ?, state_schema_version = 2",
-        (snapshot,),
-    )
-
-
 def test_schema_has_exact_tables_and_migration_is_idempotent(
     database: sqlite3.Connection,
 ) -> None:
@@ -362,12 +285,7 @@ def test_schema_has_exact_tables_and_migration_is_idempotent(
     assert tables == EXPECTED_TABLES
     assert database.execute(
         "SELECT id, name, applied_at_ms FROM _sql_schema_migrations"
-    ).fetchall() == [
-        (1, "milestone_1_foundation", 900),
-        (2, "milestone_2_room_security", 900),
-        (3, "milestone_2_player_presence", 900),
-        (4, "milestone_3_gameplay_deadline", 900),
-    ]
+    ).fetchall() == [(5, "current_room_schema", 900)]
 
 
 def test_schema_ignores_cloudflare_runtime_internal_tables(
@@ -387,7 +305,7 @@ def test_schema_ignores_cloudflare_runtime_internal_tables(
     ("tamper_sql", "message"),
     (
         (
-            "UPDATE _sql_schema_migrations SET id = 5 WHERE id = 4",
+            "UPDATE _sql_schema_migrations SET id = 6 WHERE id = 5",
             "migration history",
         ),
         (
@@ -404,11 +322,11 @@ def test_schema_ignores_cloudflare_runtime_internal_tables(
         ),
         (
             "DROP TABLE events",
-            "missing=.*events",
+            "table set is invalid",
         ),
         (
             "CREATE TABLE unexpected_projection (id INTEGER)",
-            "unexpected=.*unexpected_projection",
+            "table set is invalid",
         ),
     ),
 )
@@ -583,96 +501,38 @@ def test_presence_mutations_share_room_commit_and_roll_back_atomically(
     assert repository.presence_version() == 2
 
 
-def test_v2_to_v4_migrations_seed_presence_and_upgrade_snapshot(
+def test_legacy_database_is_reset_once_and_old_credentials_retire(
     database: sqlite3.Connection,
 ) -> None:
     repository = RoomRepository.from_sqlite(database)
     repository.initialize_schema(applied_at_ms=900)
-    repository.create_room(
-        player_room_state(),
-        players=(player_record(),),
-    )
-    downgrade_stored_snapshot_to_v2(database)
-    database.execute("DROP TABLE player_presence")
-    database.execute("DROP TABLE room_presence")
-    database.execute("DELETE FROM _sql_schema_migrations WHERE id >= 3")
+    repository.create_room(player_room_state(), players=(player_record(),))
+    database.execute("ALTER TABLE room_state ADD COLUMN ruleset_version TEXT")
+    database.execute("ALTER TABLE room_state ADD COLUMN state_schema_version INTEGER")
+    database.execute("DELETE FROM _sql_schema_migrations")
+    for migration_id, name in enumerate((
+        "milestone_1_foundation",
+        "milestone_2_room_security",
+        "milestone_2_player_presence",
+        "milestone_3_gameplay_deadline",
+    ), start=1):
+        database.execute(
+            "INSERT INTO _sql_schema_migrations VALUES (?, ?, ?)",
+            (migration_id, name, 900),
+        )
 
-    repository.initialize_schema(applied_at_ms=5_000)
-
-    assert repository.list_player_presence() == (
-        PlayerPresenceRecord(
-            player_id="player-1",
-            auth_generation=0,
-            disconnected_at_ms=5_000,
-            disconnect_expires_at_ms=305_000,
-        ),
-    )
-    assert repository.presence_version() == 1
-    assert repository.next_presence_alarm_ms() == 305_000
-    migrated = repository.load_room()
-    assert migrated is not None
-    assert migrated.ruleset_version == "0.1.0"
-    assert migrated.state_schema_version == 3
-    assert migrated.pending_deadline is None
-
-
-def test_v2_to_v4_migrations_freeze_finished_presence_and_preserve_revision(
-    database: sqlite3.Connection,
-) -> None:
-    repository = RoomRepository.from_sqlite(database)
-    repository.initialize_schema(applied_at_ms=900)
-    data = player_room_state().model_dump()
-    data["status"] = RoomStatus.FINISHED
-    finished = RoomState.model_validate(data)
-    repository.create_room(finished, players=(player_record(),))
-    downgrade_stored_snapshot_to_v2(database)
-    database.execute("DROP TABLE player_presence")
-    database.execute("DROP TABLE room_presence")
-    database.execute("DELETE FROM _sql_schema_migrations WHERE id >= 3")
-
-    repository.initialize_schema(applied_at_ms=5_000)
-
-    assert repository.list_player_presence() == (
-        PlayerPresenceRecord(
-            player_id="player-1",
-            auth_generation=0,
-            disconnected_at_ms=5_000,
-            disconnect_expires_at_ms=None,
-        ),
-    )
-    assert repository.next_presence_alarm_ms() is None
-    migrated = repository.load_room()
-    assert migrated is not None
-    assert migrated.revision == finished.revision
-    assert migrated.ruleset_version == "0.1.0"
-    assert migrated.state_schema_version == 3
-
-
-def test_migration_four_rewrites_schema_v1_without_changing_ruleset_or_revision(
-    database: sqlite3.Connection,
-) -> None:
-    repository = RoomRepository.from_sqlite(database)
-    repository.initialize_schema(applied_at_ms=900)
-    original = room_state(revision=7, updated_at_ms=1_007)
-    repository.create_room(original)
-
-    value = json.loads(str(scalar(database, "SELECT snapshot_json FROM room_state")))
-    value["stateSchemaVersion"] = 1
-    value.pop("pendingDeadline", None)
-    database.execute(
-        "UPDATE room_state SET snapshot_json = ?, state_schema_version = 1",
-        (json.dumps(value, separators=(",", ":"), sort_keys=True),),
-    )
-    database.execute("DELETE FROM _sql_schema_migrations WHERE id = 4")
-
-    repository.initialize_schema(applied_at_ms=5_000)
-
-    migrated = repository.load_room()
-    assert migrated is not None
-    assert migrated.ruleset_version == original.ruleset_version == "0.1.0"
-    assert migrated.revision == original.revision == 7
-    assert migrated.state_schema_version == 3
-    assert migrated.pending_deadline is None
+    assert repository.initialize_schema(applied_at_ms=5_000) is True
+    assert repository.load_room() is None
+    assert RoomOrchestrator(repository).load_room() is None
+    assert repository.get_player("player-1") is None
+    assert repository.presence_version() == 0
+    assert not list(database.execute("SELECT * FROM players"))
+    assert not list(database.execute("SELECT * FROM room_credentials"))
+    columns = {row[1] for row in database.execute("PRAGMA table_info(room_state)")}
+    assert "ruleset_version" not in columns
+    assert "state_schema_version" not in columns
+    assert repository.initialize_schema(applied_at_ms=6_000) is False
+    assert scalar(database, "SELECT applied_at_ms FROM _sql_schema_migrations") == 5_000
 
 
 def test_room_commit_cleans_revoked_presence_and_freezes_match_deadlines(
@@ -749,30 +609,20 @@ def test_create_and_load_round_trip_exact_canonical_state(
 
     row = database.execute(
         """
-        SELECT snapshot_json, ruleset_id, ruleset_version,
-               state_schema_version, revision, config_json,
+        SELECT snapshot_json, ruleset_id, revision, config_json,
                created_at_ms, updated_at_ms
         FROM room_state
         """
     ).fetchone()
     assert row is not None
     assert row[0] == initial.canonical_json()
-    assert row[1:5] == ("singapore", "0.1.0", 3, 0)
-    assert json.loads(row[5]) == initial.config.canonical_data()
-    assert row[6:] == (1_000, 1_000)
+    assert row[1:3] == ("singapore", 0)
+    assert json.loads(row[3]) == initial.config.canonical_data()
+    assert row[4:] == (1_000, 1_000)
     assert loaded.match is not None
     assert loaded.match.current_hand is not None
-    assert isinstance(loaded.match.current_hand.phase, DiscardClaimsPhase)
-    assert loaded.match.current_hand.pending_claims == (
-        initial.match.current_hand.pending_claims  # type: ignore[union-attr]
-    )
-    assert loaded.match.current_hand.payments == (
-        initial.match.current_hand.payments  # type: ignore[union-attr]
-    )
-    assert loaded.match.hand_history[0].payments == (
-        initial.match.hand_history[0].payments  # type: ignore[union-attr]
-    )
-    assert PRIVATE_SENTINEL in row[0]
+    assert loaded.match.current_hand.player_hands == initial.match.current_hand.player_hands
+    assert loaded.match.current_hand.wall == initial.match.current_hand.wall
 
 
 def test_create_and_cas_reject_unvalidated_model_bypasses_before_writes(
@@ -1286,8 +1136,6 @@ def test_cas_freezes_metadata_and_requires_monotonic_timestamps(
     mutations = {
         "room_id": RoomId("other-room"),
         "ruleset_id": "other-rules",
-        "ruleset_version": "99.0.0",
-        "state_schema_version": 2,
         "created_at_ms": 999,
     }
     for field, value in mutations.items():
@@ -1303,8 +1151,8 @@ def test_cas_freezes_metadata_and_requires_monotonic_timestamps(
         repository.compare_and_swap(0, backwards)
     assert repository.load_room() == initial
 
-    database.execute("UPDATE room_state SET ruleset_version = 'corrupt-index'")
-    with pytest.raises(CorruptRoomStateError, match="ruleset_version"):
+    database.execute("UPDATE room_state SET ruleset_id = 'corrupt-index'")
+    with pytest.raises(CorruptRoomStateError, match="ruleset_id"):
         repository.compare_and_swap(0, revised)
 
 
@@ -1367,9 +1215,9 @@ def test_load_rejects_indexed_metadata_that_disagrees_with_snapshot(
     repository: RoomRepository, database: sqlite3.Connection
 ) -> None:
     repository.create_room(room_state())
-    database.execute("UPDATE room_state SET ruleset_version = '99.0.0'")
+    database.execute("UPDATE room_state SET ruleset_id = 'corrupt-index'")
 
-    with pytest.raises(CorruptRoomStateError, match="ruleset_version"):
+    with pytest.raises(CorruptRoomStateError, match="ruleset_id"):
         repository.load_room()
 
 

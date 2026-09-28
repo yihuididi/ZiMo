@@ -13,7 +13,7 @@ import time
 from collections.abc import Mapping
 from typing import Any
 
-from game import VersionedPreviewEngine
+from game import SingaporeGameEngine
 from main import Default, GameRoom
 
 
@@ -84,7 +84,7 @@ class TestGameRoom(GameRoom):
         self._test_random = _ZeroRandomSource()
         self._orchestrator._clock = self._test_clock
         self._orchestrator._random_source = self._test_random
-        self._orchestrator._game_engine = VersionedPreviewEngine(
+        self._orchestrator._game_engine = SingaporeGameEngine(
             self._test_random
         )
 
@@ -209,7 +209,7 @@ class TestGameRoom(GameRoom):
                 1,
                 0,
                 "roomInitialized",
-                '{"revision":0,"roomId":"milestone-1-reconstruction","type":"roomInitialized"}',
+                '{"revision":0,"roomId":"room-reconstruction","type":"roomInitialized"}',
                 _FIXTURE_TIME_MS,
             )
             sql.exec(
@@ -374,7 +374,7 @@ class TestGameRoom(GameRoom):
         changed = self._orchestrator.reconcile_socket_presence(
             tuple(identities)
         )
-        await self._reschedule_presence_alarm()
+        await self._reschedule_room_alarm()
         view = self._orchestrator.view_for_player_id(
             identities[0][0], identities[0][1]
         )

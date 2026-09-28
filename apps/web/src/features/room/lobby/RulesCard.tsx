@@ -15,7 +15,7 @@ export function RulesCard({ view }: { view: PublicRoomView }) {
         <div>
           <dt>Ruleset</dt>
           <dd>
-            {view.rulesetId} · v{view.rulesetVersion}
+            {view.rulesetId}
           </dd>
         </div>
         <div>
@@ -114,7 +114,7 @@ export function RulesCard({ view }: { view: PublicRoomView }) {
         </details>
       </div>
       <p className="fine-print">
-        Settings are fixed for this preview milestone and freeze when the match
+        Settings are fixed for this game and freeze when the match
         starts.
       </p>
     </section>

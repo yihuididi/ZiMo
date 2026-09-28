@@ -9,9 +9,8 @@ from pydantic import Field, model_validator
 
 from .base import GameModel
 from .capabilities import (
-    MILESTONE_2_CAPABILITIES,
+    ROOM_CAPABILITIES,
     RoomCapability,
-    capabilities_for_ruleset_version,
 )
 from .config import GameConfig
 from .model import (
@@ -136,15 +135,13 @@ class PublicGameView(GameModel):
 
 
 class PublicRoomView(GameModel):
-    api_version: Literal["1"] = "1"
+    api_version: Literal["2"] = "2"
     room_id: RoomId
     revision: int = Field(ge=0)
     presence_version: int = Field(default=0, ge=0)
     status: RoomStatus
     ruleset_id: str
-    ruleset_version: str
-    state_schema_version: int = Field(ge=1)
-    capabilities: tuple[RoomCapability, ...] = MILESTONE_2_CAPABILITIES
+    capabilities: tuple[RoomCapability, ...] = ROOM_CAPABILITIES
     config: GameConfig
     viewer_player_id: PlayerId
     server_time_ms: int = Field(ge=0)
@@ -238,7 +235,7 @@ def build_public_room_view(
         raise ValueError("projected window must match canonical room state")
 
     selected_capabilities = (
-        capabilities_for_ruleset_version(room.ruleset_version)
+        ROOM_CAPABILITIES
         if capabilities is None
         else capabilities
     )
@@ -268,8 +265,6 @@ def build_public_room_view(
         presence_version=presence_version,
         status=room.status,
         ruleset_id=room.ruleset_id,
-        ruleset_version=room.ruleset_version,
-        state_schema_version=room.state_schema_version,
         capabilities=selected_capabilities,
         config=room.config,
         viewer_player_id=viewer_player_id,
