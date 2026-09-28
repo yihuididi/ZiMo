@@ -1,179 +1,175 @@
-# Graph Report - ZiMo  (2026-09-25)
+# Graph Report - ZiMo  (2026-09-28)
 
 ## Corpus Check
-- 239 files · ~419,596 words
+- 195 files · ~425,749 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 22 file(s) not represented in the graph (top: .toml 5, (none) 5, .css 4)
 
 ## Summary
-- 2682 nodes · 8197 edges · 151 communities (118 shown, 33 thin omitted)
-- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 445 edges (avg confidence: 0.92)
+- 2767 nodes · 8753 edges · 142 communities (118 shown, 24 thin omitted)
+- Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 527 edges (avg confidence: 0.92)
 - Token cost: 0 input · 0 output
 
+## Graph Freshness
+- Built from commit: `a538fd26`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
+
 ## Community Hubs (Navigation)
-- Browser Design Rendering
-- Lobby State Transitions
-- Mahjong Turn Engine
-- Live Variant Sessions
-- Game State Invariants
-- Live Editing Controls
-- Automated Seat Controllers
-- Private Player Observations
-- Persistence Validation
-- Persistence Integration Tests
-- Screenshot Rendering Library
-- Room Command Dispatch
-- Design Configuration Bar
-- Page Chat Interface
-- Domain Actions Events
-- SQLite Schema Migrations
-- Worker Integration Tests
-- HTTP Room API
-- Singapore Rules Configuration
-- Global Design Controls
-- Durable Room Lifecycle
-- Room Gameplay Tests
-- React Page Navigation
-- Web Build Dependencies
-- Lobby Command Feedback
-- Audit Record Validation
-- Live Variant Acceptance
-- Interface Design Guidance
-- Room Command Tests
-- Table Interaction Bindings
-- Frontend Contract Types
-- Room API Networking
-- Worker Test Harness
-- Pure Domain Interfaces
-- Worker Transport Boundaries
-- Branded Domain Identities
-- Gameplay Action Catalogs
-- Tile Rendering Catalog
-- Manual Edit Recovery
-- Player Presence Persistence
-- Browser Room Sessions
-- Socket Ticket Authentication
-- Room Kernel Security
-- Worker Environment Configuration
-- Atomic Room Commits
-- Svelte Injection Anchors
-- HTTP Security Middleware
-- Bonus Draw Test Fixtures
-- TypeScript Compiler Configuration
-- Live Session Storage
-- Secret Safe Observability
-- Visual Annotation Tools
-- Authoritative View Reconciliation
-- Platform Adaptation Guidance
-- Live Browser DOM
-- Workspace Build Scripts
-- Package Boundary Tests
-- Mahjong Product Roadmap
-- Visual Design Discovery
-- Current Preview Architecture
-- Graphify Incremental Updates
-- Frontend Session Contracts
-- ZiMo Product Artwork
-- Canonical State Recovery
-- Lobby Seat Status
-- Graphify Extraction Pipeline
-- Local Test Servers
-- Graphify Export Formats
-- Semantic Extraction Schema
-- Knowledge Graph Traversal
-- Browser Scope Filters
-- Deterministic Test Dependencies
-- Frontend Design Principles
-- Typography Assessment
-- Graphify Ingestion Watching
-- Impeccable Script Setup
-- Web Testing Practices
-- Repository Graph Merging
-- Inline Text Editing
-- Canonical Model Serialization
-- CORS Error Handling
-- Authenticated Room Views
-- Worker Probe Fixtures
-- Impeccable Agent Interface
-- Interface Performance Guidance
-- Apache License Terms
-- Media Transcription Pipeline
-- Project Graph Navigation
-- Browser Test Examples
-- Worker Runtime Exports
-- White Dragon Artwork
-- Bamboo Flower Artwork
-- Chrysanthemum Flower Artwork
-- Orchid Flower Artwork
-- Plum Flower Artwork
-- Mouse Tile Artwork
-- Rooster Tile Artwork
-- Autumn Season Artwork
-- Spring Season Artwork
-- Summer Season Artwork
-- Winter Season Artwork
-- Five Characters Artwork
-- Six Characters Artwork
-- Seven Characters Artwork
-- Eight Characters Artwork
-- Nine Characters Artwork
-- One Dot Artwork
-- Two Dots Artwork
-- Three Dots Artwork
-- Four Dots Artwork
-- Five Dots Artwork
-- Six Dots Artwork
-- Seven Dots Artwork
-- Eight Dots Artwork
-- Nine Dots Artwork
-- Green Dragon Artwork
-- Red Dragon Artwork
-- East Wind Artwork
-- North Wind Artwork
-- South Wind Artwork
-- West Wind Artwork
-- Bolder Design Refinement
-- Semantic Color Roles
-- Legacy Craft Routing
-- Independent Design Critique
-- Reference Asset Production
-- Design System Documentation
-- Manual Edit Atomicity
-- Reusable Design Tokens
-- Familiar Interface Operation
-- Snapshot Version Two
-- Snapshot Version Three
-- Canonical Data Types
-- Web Application Entry
-- Green Tile Back
-- One Bamboo Artwork
-- Two Bamboo Artwork
-- Three Bamboo Artwork
-- Four Bamboo Artwork
-- Five Bamboo Artwork
-- Six Bamboo Artwork
-- Seven Bamboo Artwork
-- Eight Bamboo Artwork
-- Nine Bamboo Artwork
-- Cat Tile Artwork
-- Centipede Tile Artwork
-- One Character Artwork
-- Two Characters Artwork
-- Three Characters Artwork
-- Four Characters Artwork
-- Mahjong API Package
+- live-browser.js
+- PlayerId
+- test_game_milestone3.py
+- resumeSession
+- test_game_invariant_matrix.py
+- setLiveState
+- PolicyId
+- game/__init__.py
+- repository.py
+- test_persistence.py
+- modern-screenshot.umd.js
+- kernel.py
+- el
+- initPageChat
+- SeatId
+- schema.py
+- worker.integration.test.mjs
+- http_api.py
+- GameConfig
+- initGlobalBar
+- GameRoom
+- RoomGameplayTests
+- AuthenticatedRoom.tsx
+- web/package.json
+- LobbyView.tsx
+- ProcessedCommandRecord
+- mountSvelteComponentVariant
+- Interface Polish
+- .create
+- TableView.tsx
+- types.ts
+- api.ts
+- TestGameRoom
+- RoomState
+- durable_room.py
+- model.py
+- RoomGameplay
+- RoomOrchestrator
+- handleManualEditActivity
+- RoomRepository
+- session.ts
+- scheduleAcceptCleanup
+- RoomKernel
+- worker_entry.py
+- PlayerPresenceRecord
+- resolveLiveInjectionAnchor
+- Any
+- AllBonusChainRandomSource
+- compilerOptions
+- createLiveBrowserSessionState
+- log_unexpected
+- onAnnotDown
+- App.test.tsx
+- Android platform
+- createLiveBrowserDomHelpers
+- scripts
+- RoomPresence
+- Nine milestone Mahjong roadmap
+- Shape design brief
+- Native technical audit
+- Graphify incremental updates
+- Visualize direction comps
+- T
+- Q: How does RoomState connect gameplay, privacy, persistence, and recovery?
+- SeatList.tsx
+- Graphify knowledge graph
+- Q: Trace exactly what information a bot can see
+- Graphify exports
+- Semantic extraction schema
+- Graphify query traversal
+- live-browser-ignores.js
+- test_room_lobby.py
+- Frontend Design
+- Typeset typography
+- Graphify ingestion and watching
+- impeccable
+- Q: Verify bot hidden-information exclusions directly in source and run relevant tests
+- Graphify repository merging
+- documentRefForElement
+- .canonical_data
+- SafeCORSMiddleware
+- RoomServiceError
+- worker-probe.mjs
+- Impeccable
+- Interface Performance Optimization
+- Apache License 2.0
+- Graphify media transcription
+- Project graphify rules
+- White dragon tile
+- Bamboo flower tile
+- Chrysanthemum flower tile
+- Orchid flower tile
+- Plum flower tile
+- Mouse animal tile
+- Rooster animal tile
+- Autumn season tile
+- Spring season tile
+- Summer season tile
+- Winter season tile
+- Five Characters Mahjong Tile
+- Six Characters Mahjong Tile
+- Seven Characters Mahjong Tile
+- Eight Characters Mahjong Tile
+- Nine Characters Mahjong Tile
+- One Dot Mahjong Tile
+- Two Dots Mahjong Tile
+- Three Dots Mahjong Tile
+- Four Dots Mahjong Tile
+- Five Dots Mahjong Tile
+- Six Dots Mahjong Tile
+- Seven Dots Mahjong Tile
+- Eight Dots Mahjong Tile
+- Nine Dots Mahjong Tile
+- Green Dragon Mahjong Tile
+- Red Dragon Mahjong Tile
+- East wind tile
+- North wind tile
+- South wind tile
+- West wind tile
+- Asset Producer
+- Documenter
+- Entry atomicity
+- Design Tokens
+- Earned Familiarity
+- src main.tsx module
+- Green tile back
+- Bamboo one tile
+- Bamboo two tile
+- Bamboo three tile
+- Alternating bamboo square
+- Bamboo five tile
+- Bamboo six tile
+- Bamboo seven tile
+- Bamboo eight tile
+- Bamboo nine tile
+- Cat animal tile
+- Centipede animal tile
+- Blue one above pink wan
+- Blue two above pink wan
+- Blue three above pink wan
+- Blue four above pink wan
+- mahjong-api
 
 ## God Nodes (most connected - your core abstractions)
-1. `RoomState` - 138 edges
-2. `SeatId` - 110 edges
-3. `GameModel` - 95 edges
+1. `RoomState` - 162 edges
+2. `SeatId` - 134 edges
+3. `GameModel` - 98 edges
 4. `RoomRepository` - 87 edges
 5. `PlayerId` - 71 edges
-6. `MilestoneThreeEngine` - 54 edges
-7. `WindowId` - 46 edges
-8. `validate_milestone_three_room()` - 38 edges
-9. `GameConfig` - 35 edges
-10. `GameRoom` - 33 edges
+6. `MilestoneThreeEngine` - 59 edges
+7. `MilestoneFourEngine` - 53 edges
+8. `WindowId` - 53 edges
+9. `HandState` - 39 edges
+10. `validate_milestone_three_room()` - 37 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Web Application Testing` --semantically_similar_to--> `CPython Pyodide and workerd testing`  [INFERRED] [semantically similar]
@@ -193,506 +189,499 @@
 ## Hyperedges (group relationships)
 - **Server authoritative room stack** — readme_react_cloudflare_pages_frontend, readme_fastapi_python_worker, readme_game_room_durable_object, readme_sqlite_room_state_snapshot, readme_hibernating_websockets [EXTRACTED 1.00]
 
-## Communities (151 total, 33 thin omitted)
+## Communities (142 total, 24 thin omitted)
 
-### Community 0 - "Browser Design Rendering"
+### Community 0 - "live-browser.js"
 Cohesion: 0.03
-Nodes (146): addManualContextText(), applyGlobalBarLabelState(), applyPlaceholderSizingStyles(), averageRgb01(), bindEditBadgeProxy(), bufferToBase64(), buildCollapsible(), buildColorModels() (+138 more)
+Nodes (125): applyGlobalBarLabelState(), applyPlaceholderSizingStyles(), averageRgb01(), bindEditBadgeProxy(), bufferToBase64(), buildCollapsible(), buildColorModels(), buildInsertPlaceholderSnapshotFromDom() (+117 more)
 
-### Community 1 - "Lobby State Transitions"
-Cohesion: 0.07
-Nodes (71): ProjectionBuilder, PlayerId, PlayerState, SeatState, OpaqueActionDescriptor, model_validator, Presentation-only handle resolved to a domain action by orchestration., _action_id() (+63 more)
+### Community 1 - "PlayerId"
+Cohesion: 0.05
+Nodes (79): Network idle wait, Python Playwright, Rendered DOM reconnaissance, Web Application Testing, is_server_ready(), main(), Start one or more servers, wait for them to be ready, run a command, then clean…, Wait for server to be ready by polling the port. (+71 more)
 
-### Community 2 - "Mahjong Turn Engine"
-Cohesion: 0.07
-Nodes (66): MatchCompletionRequested, Ask room orchestration to finalize a clock-free completed preview., _complete_tie(), _discard_window_id(), finalize_completed_preview(), _first_hand_id(), IllegalGameActionError, InvalidGameStateError (+58 more)
-
-### Community 3 - "Live Variant Sessions"
-Cohesion: 0.06
-Nodes (86): applyParamDefaults(), applyParamValue(), applyPlaceholderDimensions(), applySavedSessionMeta(), clampVariantIndex(), clearHandled(), clearSession(), closedClipPath() (+78 more)
-
-### Community 4 - "Game State Invariants"
+### Community 2 - "test_game_milestone3.py"
 Cohesion: 0.08
-Nodes (47): _collect_held_tiles(), DiscardClaimsPhase, DiscardState, FanAward, HandId, HandResult, HandState, MatchId (+39 more)
+Nodes (30): PendingDeadline, PhysicalTile, Logical face shared by one or more uniquely identified physical tiles., Canonical room-owned deadline for the active discard window., TileFace, TileFamily, canonical_face_counts(), canonical_physical_deck() (+22 more)
 
-### Community 5 - "Live Editing Controls"
+### Community 3 - "resumeSession"
+Cohesion: 0.05
+Nodes (97): abandonForeignSession(), abortSvelteComponentInjection(), applyParamDefaults(), applyParamValue(), applyPlaceholderDimensions(), applySavedSessionMeta(), buildParamsPanel(), checkpointPayload() (+89 more)
+
+### Community 4 - "test_game_invariant_matrix.py"
 Cohesion: 0.09
-Nodes (71): abandonForeignSession(), abortSvelteComponentInjection(), applyEditing(), beginNewLiveConfiguration(), cancelEditing(), cancelEditingToPicking(), cancelInsertConfigure(), cleanup() (+63 more)
+Nodes (33): AutomatedSeatController, ExternalSeatController, HandResult, MatchId, MatchState, Payment, PendingClaim, PlayerHand (+25 more)
 
-### Community 6 - "Automated Seat Controllers"
-Cohesion: 0.07
-Nodes (37): AutomatedPolicy, AutomatedPolicySelector, choose_automated_action(), NoLegalActionsError, DomainAction, Protocol, RuntimeError, RandomBotPolicy (+29 more)
-
-### Community 7 - "Private Player Observations"
-Cohesion: 0.08
-Nodes (50): capabilities_for_ruleset_version(), Ruleset-versioned public capability metadata., Immutable Singapore Mahjong configuration values., AwaitingDrawPhase, ClaimKind, KongReplacementPhase, KongRobberyPhase, MeldKind (+42 more)
-
-### Community 8 - "Persistence Validation"
-Cohesion: 0.10
-Nodes (54): PersistenceError, PlayerProjectionError, ProcessedCommandConflictError, RuntimeError, Stable persistence failures with application-level meaning., Raised when a Durable Object has already been initialized., Raised when a commit is attempted before room initialization., Raised when an optimistic compare-and-swap revision is stale. (+46 more)
-
-### Community 9 - "Persistence Integration Tests"
+### Community 5 - "setLiveState"
 Cohesion: 0.11
-Nodes (52): Any, Apply all application SQL migrations exactly once., Synchronous repository for one room per SQL database., RoomRepository, committed_event(), database(), downgrade_stored_snapshot_to_v2(), initialized_event() (+44 more)
+Nodes (61): applyEditing(), beginNewLiveConfiguration(), cancelEditing(), cancelEditingToPicking(), cancelInsertConfigure(), cleanup(), cleanupAcceptedSession(), clearAnnotations() (+53 more)
 
-### Community 10 - "Screenshot Rendering Library"
+### Community 6 - "PolicyId"
+Cohesion: 0.05
+Nodes (29): AutomatedPolicy, AutomatedPolicySelector, choose_automated_action(), DomainAction, Protocol, Choose synchronously using only the supplied observation and actions., Resolve a persisted policy descriptor to an injected policy., Route one automated choice through only its seat observation and actions. (+21 more)
+
+### Community 7 - "game/__init__.py"
+Cohesion: 0.08
+Nodes (69): GameModel, Shared modelling and canonical-serialization primitives for the game domain., Immutable, strict base model used by every persisted domain value. Attribute…, capabilities_for_ruleset_version(), Ruleset-versioned public capability metadata., Immutable Singapore Mahjong configuration values., NoLegalActionsError, RuntimeError (+61 more)
+
+### Community 8 - "repository.py"
+Cohesion: 0.08
+Nodes (64): PlayerProjectionError, Raised when authentication projections disagree with canonical state., Stable public facade for Mahjong room persistence. The Worker loads this module…, _audit_payload_json(), _canonical_json_value(), GameplayAuditPayload, _identity_text(), LobbyAuditPayload (+56 more)
+
+### Community 9 - "test_persistence.py"
+Cohesion: 0.10
+Nodes (53): CommandId, Allow-listed public fact that a canonical room was initialized., RoomInitializedAuditPayload, Adapter for a CPython ``sqlite3.Connection``. The connection is switched to…, SQLiteSqlExecutor, committed_event(), database(), downgrade_stored_snapshot_to_v2() (+45 more)
+
+### Community 10 - "modern-screenshot.umd.js"
 Cohesion: 0.09
 Nodes (55): ae(), be(), bt(), Ce(), s(), Ct(), de(), dt() (+47 more)
 
-### Community 11 - "Room Command Dispatch"
-Cohesion: 0.10
-Nodes (37): canonical_json(), command_fingerprint(), derive_rotated_invite(), lobby_service_error(), parse_complete_config(), project_event(), Any, CommandResult (+29 more)
+### Community 11 - "kernel.py"
+Cohesion: 0.13
+Nodes (28): canonical_json(), command_fingerprint(), derive_rotated_invite(), project_event(), Any, CommandResult, Canonical validation, hashing, and projection helpers for room services., require_non_negative_int() (+20 more)
 
-### Community 12 - "Design Configuration Bar"
-Cohesion: 0.08
-Nodes (54): actionLabel(), applyConfigureBarChrome(), bindConfigureCountPillTooltip(), bindConfigureInlineControlHover(), bindConfigureModifierPillHover(), buildConfigureActionControl(), buildConfigureCountControl(), buildConfigureRow() (+46 more)
-
-### Community 13 - "Page Chat Interface"
+### Community 12 - "el"
 Cohesion: 0.07
-Nodes (54): agentHasWorkInFlight(), armPageChatForTyping(), attachSteerFocusDebug(), attachSteerFocusGuard(), buildSteerProcessingDots(), buildSteerQueueHint(), clearSteerAwaitTimer(), clearSteerFocusRecoverTimer() (+46 more)
+Nodes (53): actionLabel(), applyConfigureBarChrome(), bindConfigureCountPillTooltip(), bindConfigureInlineControlHover(), bindConfigureModifierPillHover(), buildConfigureActionControl(), buildConfigureCountControl(), buildConfigureRow() (+45 more)
 
-### Community 14 - "Domain Actions Events"
-Cohesion: 0.11
-Nodes (38): Chow, Continue, DeclareWin, Discard, Draw, Kong, KongKind, parse_domain_action_json() (+30 more)
-
-### Community 15 - "SQLite Schema Migrations"
+### Community 13 - "initPageChat"
 Cohesion: 0.08
-Nodes (33): CorruptRoomStateError, Raised when canonical state and its indexed metadata disagree., Raised when storage was written by a newer or inconsistent schema., UnsupportedSchemaVersionError, _now_ms(), application_table_names(), initialize_schema(), migrate() (+25 more)
+Nodes (47): armPageChatForTyping(), attachSteerFocusDebug(), attachSteerFocusGuard(), clearSteerAwaitTimer(), clearSteerFocusRecoverTimer(), collapsePageChat(), expandPageChat(), finishVoiceSession() (+39 more)
 
-### Community 16 - "Worker Integration Tests"
+### Community 14 - "SeatId"
+Cohesion: 0.09
+Nodes (36): Chow, Continue, DeclareWin, Discard, Draw, FinishHand, Kong, KongKind (+28 more)
+
+### Community 15 - "schema.py"
+Cohesion: 0.07
+Nodes (38): PersistenceError, RuntimeError, Stable persistence failures with application-level meaning., Raised when a Durable Object has already been initialized., Raised when a commit is attempted before room initialization., Raised when an optimistic compare-and-swap revision is stale., Raised when storage was written by a newer or inconsistent schema., Base class for repository failures with stable application meaning. (+30 more)
+
+### Community 16 - "worker.integration.test.mjs"
 Cohesion: 0.06
 Nodes (39): devDependencies, vitest, wrangler, ws, engines, node, vitest, name (+31 more)
 
-### Community 17 - "HTTP Room API"
+### Community 17 - "http_api.py"
 Cohesion: 0.11
 Nodes (45): api_problem_handler(), CommandRequest, create_room(), CreateRoomRequest, _error_response(), _existing_room_stub(), get_events(), get_room() (+37 more)
 
-### Community 18 - "Singapore Rules Configuration"
+### Community 18 - "GameConfig"
 Cohesion: 0.07
-Nodes (21): canonical_json(), BaseModel, Canonicalize an arbitrary Pydantic model using the domain convention., GameConfig, model_validator, The complete normalized configuration shape reserved by the roadmap. Milestone…, Validate and return the immutable normalized configuration., model_validator (+13 more)
+Nodes (20): canonical_json(), BaseModel, Canonicalize an arbitrary Pydantic model using the domain convention., GameConfig, model_validator, The complete normalized configuration shape reserved by the roadmap. Milestone…, Validate and return the immutable normalized configuration., Any (+12 more)
 
-### Community 19 - "Global Design Controls"
+### Community 19 - "initGlobalBar"
 Cohesion: 0.08
-Nodes (41): agentStatusText(), barPaletteForTheme(), brandMarkSvg(), buildDesignHeader(), buildParamsPanel(), cursorForInsertAxis(), designPanelCss(), detectPageTheme() (+33 more)
+Nodes (42): agentHasWorkInFlight(), agentStatusText(), barPaletteForTheme(), brandMarkSvg(), buildDesignHeader(), buildSteerProcessingDots(), buildSteerQueueHint(), cursorForInsertAxis() (+34 more)
 
-### Community 20 - "Durable Room Lifecycle"
+### Community 20 - "GameRoom"
 Cohesion: 0.10
 Nodes (17): _close_socket(), GameRoom, initialize_schema(), Any, Run, then schedule and push every commit before returning., Point the room's sole alarm at its earliest durable deadline., Compatibility alias for test-only Milestone 2 probes., Rediscover live identities without relying on in-memory socket state. (+9 more)
 
-### Community 21 - "Room Gameplay Tests"
-Cohesion: 0.08
-Nodes (16): Compose command and presence use cases around one repository/cache owner., RoomOrchestrator, action_for_slot(), DeterministicCapabilities, DeterministicIds, DuplicateFaceRandomSource, MutableClock, Valid deterministic permutation with seat zero and first legal choices. (+8 more)
+### Community 21 - "RoomGameplayTests"
+Cohesion: 0.18
+Nodes (6): action_for_slot(), DuplicateFaceRandomSource, Valid deterministic permutation with seat zero and first legal choices., Deal two physical copies of the first face to seat zero., RoomGameplayTests, ZeroRandomSource
 
-### Community 22 - "React Page Navigation"
+### Community 22 - "AuthenticatedRoom.tsx"
 Cohesion: 0.14
 Nodes (26): App(), BrandLink(), PageHeading(), PageHeadingProps, LoadingRoom(), JoinRoom(), handleJoin(), LobbyView() (+18 more)
 
-### Community 23 - "Web Build Dependencies"
+### Community 23 - "web/package.json"
 Cohesion: 0.05
 Nodes (36): dependencies, react, react-dom, react-router-dom, @supabase/supabase-js, devDependencies, jsdom, @testing-library/dom (+28 more)
 
-### Community 24 - "Lobby Command Feedback"
-Cohesion: 0.13
-Nodes (28): CommandStatus(), CommandStatusProps, CopyState, InvitePanel(), copyInvitation(), InvitePanelProps, LobbyViewProps, ActionEntryProps (+20 more)
+### Community 24 - "LobbyView.tsx"
+Cohesion: 0.14
+Nodes (27): CommandStatus(), CommandStatusProps, CopyState, InvitePanel(), copyInvitation(), InvitePanelProps, LobbyViewProps, ActionEntryProps (+19 more)
 
-### Community 25 - "Audit Record Validation"
-Cohesion: 0.10
-Nodes (25): _audit_payload_json(), _canonical_json_value(), _canonicalize_json_text(), GameplayAuditPayload, _identity_text(), LobbyAuditPayload, _optional_text(), _parse_audit_payload() (+17 more)
+### Community 25 - "ProcessedCommandRecord"
+Cohesion: 0.33
+Nodes (7): ProcessedCommandConflictError, Raised when a command id is reused for a different request., _canonicalize_json_text(), ProcessedCommandRecord, A durable idempotency result scoped to one room-local player., _validate_processed_command(), Return a prior result, rejecting command-id reuse with new content.
 
-### Community 26 - "Live Variant Acceptance"
-Cohesion: 0.08
-Nodes (33): acceptedDomAlreadyClean(), applyOriginalAttrsToSvelteAnchor(), captureAndEmit(), checkpointPayload(), clearHandledWrapperReloadStamp(), commitAcceptedSvelteComponentToDom(), compileShader(), componentModuleCandidates() (+25 more)
+### Community 26 - "mountSvelteComponentVariant"
+Cohesion: 0.18
+Nodes (15): applyOriginalAttrsToSvelteAnchor(), commitAcceptedSvelteComponentToDom(), componentModuleCandidates(), describeMountFailure(), detectDevServerBase(), getMountedSvelteComponentAnchor(), importFirstReachable(), loadSvelteRuntime() (+7 more)
 
-### Community 27 - "Interface Design Guidance"
+### Community 27 - "Interface Polish"
 Cohesion: 0.07
 Nodes (32): Earned Delight, Emotional Moment, Design Simplification, Progressive Disclosure, Artifact Drift Repair, Schema Drift, DESIGN.md, Design System Documentation (+24 more)
 
-### Community 28 - "Room Command Tests"
+### Community 28 - ".create"
 Cohesion: 0.17
 Nodes (7): descriptor_id(), RoomCommandTests, RoomCreationAndAuthenticationTests, RoomOrchestratorTestCase, RoomPresenceTests, RoomTicketsEventsAndAtomicityTests, sha256()
 
-### Community 29 - "Table Interaction Bindings"
-Cohesion: 0.11
-Nodes (21): BonusTiles(), DiscardRiver(), occupantName(), PhaseStatus(), positions, positionSeats(), SeatHeader(), TablePosition (+13 more)
+### Community 29 - "TableView.tsx"
+Cohesion: 0.14
+Nodes (19): BonusTiles(), DiscardRiver(), Melds(), occupantName(), PhaseStatus(), positions, positionSeats(), SeatHeader() (+11 more)
 
-### Community 30 - "Frontend Contract Types"
-Cohesion: 0.07
-Nodes (30): BaseSeatView, ClaimKind, CommandResponse, CreateRoomResponse, EventsResponse, FanAward, GameConfig, HandResult (+22 more)
+### Community 30 - "types.ts"
+Cohesion: 0.05
+Nodes (53): DiscardTile(), DiscardTileProps, TileBack(), TileFace(), TileFaceProps, ALL_TILE_FACES, animalFiles, animalNames (+45 more)
 
-### Community 31 - "Room API Networking"
-Cohesion: 0.16
-Nodes (20): RETRY_DELAYS_MS, MockWebSocket, useRoomSocket(), apiBaseUrl, ApiError, createRoom(), createSocketTicket(), ErrorEnvelope (+12 more)
+### Community 31 - "api.ts"
+Cohesion: 0.14
+Nodes (23): AuthenticatedRoom(), useRoomCommands(), RETRY_DELAYS_MS, MockWebSocket, useRoomSocket(), UseRoomSocketOptions, apiBaseUrl, ApiError (+15 more)
 
-### Community 32 - "Worker Test Harness"
+### Community 32 - "TestGameRoom"
 Cohesion: 0.09
 Nodes (13): _json(), _MutableTestClock, Any, Reconstruct a pending window, then run the real alarm at N-1/N., Make one existing grace deadline due, then run the real alarm path., Run production batch reconciliation after test-controlled eviction., Real time by default, with explicit boundary control for one test RPC., Make the host the dealer and every automated decision reproducible. (+5 more)
 
-### Community 33 - "Pure Domain Interfaces"
-Cohesion: 0.14
-Nodes (13): GameEngine, GameplayUnavailableError, legal_actions(), MilestoneOneEngine, ObservationBuilder, DomainAction, Protocol, RuntimeError (+5 more)
+### Community 33 - "RoomState"
+Cohesion: 0.08
+Nodes (71): AutomatedDecisionRequested, ClaimWindowRequested, MatchCompletionRequested, model_validator, Ask room orchestration to finalize a clock-free completed preview., _complete_tie(), _discard_window_id(), finalize_completed_preview() (+63 more)
 
-### Community 34 - "Worker Transport Boundaries"
+### Community 34 - "durable_room.py"
 Cohesion: 0.21
 Nodes (22): WorkerResponse, Cloudflare Durable Object adapter for one authoritative room., _room_view_frame(), Stable Cloudflare Worker and Durable Object export facade., canonical_data(), canonical_json(), method_text(), parse_bearer() (+14 more)
 
-### Community 35 - "Branded Domain Identities"
+### Community 35 - "model.py"
+Cohesion: 0.13
+Nodes (20): _collect_held_tiles(), ConnectionId, DiscardState, DomainId, HandId, HandState, Canonical immutable room, match, hand, and tile state., Runtime-branded immutable identity that persists as a JSON string. (+12 more)
+
+### Community 36 - "RoomGameplay"
+Cohesion: 0.15
+Nodes (9): _CataloguedGameplayAction, _project_gameplay_event(), DomainAction, DomainEvent, Idempotently resolve the active window at its exact deadline., Consume room-owned effects without exposing an intermediate state., Gameplay-side use cases layered on a :class:`RoomKernel`., RoomGameplay (+1 more)
+
+### Community 37 - "RoomOrchestrator"
+Cohesion: 0.14
+Nodes (7): Compose command and presence use cases around one repository/cache owner., RoomOrchestrator, DeterministicCapabilities, DeterministicIds, MutableClock, legacy_room(), MultiplayerClaimTests
+
+### Community 38 - "handleManualEditActivity"
+Cohesion: 0.17
+Nodes (26): clearStoredManualApplyState(), fetchPendingCount(), handleManualEditActivity(), hidePendingApplyDock(), manualApplyLoadingText(), manualApplyStateKey(), manualEditEventForCurrentPage(), numberOrNull() (+18 more)
+
+### Community 39 - "RoomRepository"
+Cohesion: 0.06
+Nodes (34): CorruptRoomStateError, Raised when canonical state and its indexed metadata disagree., Raised when a socket ticket is unknown, expired, stale, or consumed., SocketTicketUnavailableError, A projected event after the repository assigns its public sequence., StoredAuditEvent, Any, Apply all application SQL migrations exactly once. (+26 more)
+
+### Community 40 - "session.ts"
+Cohesion: 0.18
+Nodes (24): useInviteCapability(), UseInviteCapabilityOptions, browserStorage(), clearRoomSession(), InviteTokenRemoval, listStoredRooms(), loadRoomSession(), parsePersistedSession() (+16 more)
+
+### Community 41 - "scheduleAcceptCleanup"
+Cohesion: 0.31
+Nodes (11): acceptedDomAlreadyClean(), clearHandledWrapperReloadStamp(), deferredRecoverySuperseded(), ensureAcceptedDomClean(), findAcceptedRuntimeWrappers(), handledWrapperReloadKey(), reloadAfterMissingAcceptedDom(), restoreAcceptedDomFromSnapshot() (+3 more)
+
+### Community 42 - "RoomKernel"
 Cohesion: 0.11
-Nodes (13): CommandId, ConnectionId, DomainId, ExternalSeatController, Runtime-branded immutable identity that persists as a JSON string., Return the four stable empty table slots used by new rooms., RoomId, standard_seats() (+5 more)
-
-### Community 36 - "Gameplay Action Catalogs"
-Cohesion: 0.16
-Nodes (9): _CataloguedGameplayAction, _project_gameplay_event(), DomainAction, DomainEvent, Consume room-owned effects without exposing an intermediate state., Gameplay-side use cases layered on a :class:`RoomKernel`., Idempotently resolve the active window at its exact deadline., RoomGameplay (+1 more)
-
-### Community 37 - "Tile Rendering Catalog"
-Cohesion: 0.12
-Nodes (22): DiscardTile(), DiscardTileProps, TileBack(), TileFace(), TileFaceProps, ALL_TILE_FACES, animalFiles, animalNames (+14 more)
-
-### Community 38 - "Manual Edit Recovery"
-Cohesion: 0.19
-Nodes (24): clearStoredManualApplyState(), fetchPendingCount(), handleManualEditActivity(), hidePendingApplyDock(), manualApplyLoadingText(), manualApplyStateKey(), manualEditEventForCurrentPage(), numberOrNull() (+16 more)
-
-### Community 39 - "Player Presence Persistence"
-Cohesion: 0.11
-Nodes (13): _player_presence_from_row(), PlayerPresenceRecord, Durable disconnected state for one active authentication generation., Apply one public presence change and bump its version at most once., Persist disconnected state for an active authentication generation. The…, Clear durable disconnected state for an active socket identity., Atomically clear disconnected state for active socket identities., Return disconnected state for active players and generations only. (+5 more)
-
-### Community 40 - "Browser Room Sessions"
-Cohesion: 0.21
-Nodes (21): AuthenticatedRoom(), useInviteCapability(), browserStorage(), clearRoomSession(), InviteTokenRemoval, listStoredRooms(), loadRoomSession(), parsePersistedSession() (+13 more)
-
-### Community 41 - "Socket Ticket Authentication"
-Cohesion: 0.12
-Nodes (11): A hashed, single-use WebSocket ticket projection., _require_sha256_hex(), SocketTicketRecord, _validate_socket_ticket(), Atomically authenticate an active token against canonical membership., Issue a ticket atomically without changing the canonical revision., Atomically consume an unexpired ticket for an active auth generation., Delete expired and consumed ticket rows without advancing revision. (+3 more)
-
-### Community 42 - "Room Kernel Security"
-Cohesion: 0.12
 Nodes (5): capability_hash(), CommandResult, Sample the injected clock once for a complete incoming operation., Own the mutable repository cache and atomic commit boundary., RoomKernel
 
-### Community 43 - "Worker Environment Configuration"
+### Community 43 - "worker_entry.py"
 Cohesion: 0.16
 Nodes (13): Any, BaseModel, _read_environment_value(), Settings, create_supabase_client(), Create the shared client when both public Supabase values are configured., Default, Any (+5 more)
 
-### Community 44 - "Atomic Room Commits"
+### Community 44 - "PlayerPresenceRecord"
 Cohesion: 0.15
-Nodes (8): ProcessedCommandRecord, ProjectedAuditEvent, An allow-listed, secret-free event ready for public audit storage., A durable idempotency result scoped to one room-local player., Hashed, rotatable room invite capability; raw values never persist., RoomCredentialRecord, _validate_room_credential(), Keyword-oriented alias for :meth:`compare_and_swap`.
+Nodes (11): PlayerPresenceRecord, ProjectedAuditEvent, An allow-listed, secret-free event ready for public audit storage., Durable disconnected state for one active authentication generation., A hashed, single-use WebSocket ticket projection., Hashed, rotatable room invite capability; raw values never persist., RoomCredentialRecord, SocketTicketRecord (+3 more)
 
-### Community 45 - "Svelte Injection Anchors"
+### Community 45 - "resolveLiveInjectionAnchor"
 Cohesion: 0.16
 Nodes (19): buildSvelteExpressionTextMap(), buildSveltePropValuesFromLiveElement(), buildSveltePropValuesV2(), cloneWithoutElements(), collectTextNodes(), collectVisibleTexts(), cssEscapeIdent(), elementMatchesOriginalMarkup() (+11 more)
 
-### Community 46 - "HTTP Security Middleware"
+### Community 46 - "Any"
 Cohesion: 0.15
 Nodes (9): ConfigRequest, EnvironmentCORSMiddleware, Any, Resolve the one allowed frontend origin from the Worker environment., Prevent all room responses, including errors, from being cached., Authenticate protected room routes before FastAPI parses their bodies., RoomBearerMiddleware, RoomNoStoreMiddleware (+1 more)
 
-### Community 47 - "Bonus Draw Test Fixtures"
+### Community 47 - "AllBonusChainRandomSource"
 Cohesion: 0.12
 Nodes (9): AllBonusChainRandomSource, DealerTwoInitialBonusRandomSource, FinalLiveBonusRandomSource, InitialBonusRandomSource, T, Deal one raw bonus, then provide a regular opposite-end replacement., Put one bonus at the final live position and the other bonuses in reserve., Exercise dealer-relative initial exposure and a bonus replacement. (+1 more)
 
-### Community 48 - "TypeScript Compiler Configuration"
+### Community 48 - "compilerOptions"
 Cohesion: 0.11
 Nodes (18): compilerOptions, allowJs, allowSyntheticDefaultImports, esModuleInterop, forceConsistentCasingInFileNames, isolatedModules, jsx, lib (+10 more)
 
-### Community 49 - "Live Session Storage"
+### Community 49 - "createLiveBrowserSessionState"
 Cohesion: 0.21
 Nodes (15): createLiveBrowserSessionState(), clearHandled(), clearScrollY(), clearSession(), isHandled(), loadSession(), markHandled(), nextCheckpointRevision() (+7 more)
 
-### Community 50 - "Secret Safe Observability"
+### Community 50 - "log_unexpected"
 Cohesion: 0.15
 Nodes (12): log_unexpected(), Secret-safe structured logging for redacted unexpected failures., Log an allow-listed boundary and exception category, never its values.…, CapturingLogger, test_http_boundary_keeps_redacted_response_and_logs_once(), test_logging_failure_never_replaces_public_error(), test_unexpected_log_is_structured_and_excludes_exception_values(), test_unexpected_log_normalizes_untrusted_operation_and_exception_type() (+4 more)
 
-### Community 51 - "Visual Annotation Tools"
+### Community 51 - "onAnnotDown"
 Cohesion: 0.20
 Nodes (17): beginEditPin(), buildAnnotationsForCapture(), buildPinElement(), cancelEditingPin(), clampPlaceholderSize(), finalizeEditingPin(), initAnnotOverlay(), localCoords() (+9 more)
 
-### Community 52 - "Authoritative View Reconciliation"
-Cohesion: 0.22
-Nodes (13): emitSocketView(), openHostLobby(), openMemberLobby(), openPromotedHostLobby(), socketHarness, viewWithDisconnectedMember(), shouldAcceptRoomView(), useAuthoritativeRoomView() (+5 more)
+### Community 52 - "App.test.tsx"
+Cohesion: 0.13
+Nodes (20): emitSocketView(), openHostLobby(), openMemberLobby(), openPromotedHostLobby(), socketHarness, viewWithDisconnectedMember(), AuthenticatedRoomProps, JoinRoomProps (+12 more)
 
-### Community 53 - "Platform Adaptation Guidance"
-Cohesion: 0.12
-Nodes (16): Context appropriate responsive design, Native adaptation, Platform size classes, Web adaptation, Android platform, Material Design 3, Motion thesis, Purposeful animation (+8 more)
+### Community 53 - "Android platform"
+Cohesion: 0.25
+Nodes (8): Context appropriate responsive design, Native adaptation, Platform size classes, Web adaptation, Android platform, Material Design 3, Motion thesis, Purposeful animation
 
-### Community 54 - "Live Browser DOM"
-Cohesion: 0.17
-Nodes (10): createLiveBrowserDomHelpers(), cssId(), liveUiRoot(), makeFrozenAnchor(), own(), pickable(), rectIsUsableAnchor(), uiAppend() (+2 more)
+### Community 54 - "createLiveBrowserDomHelpers"
+Cohesion: 0.16
+Nodes (11): createLiveBrowserDomHelpers(), cssId(), liveUiRoot(), makeFrozenAnchor(), own(), pickable(), rectIsUsableAnchor(), uiAppend() (+3 more)
 
-### Community 55 - "Workspace Build Scripts"
+### Community 55 - "scripts"
 Cohesion: 0.12
 Nodes (15): engines, node, name, private, scripts, build:api, build:web, check (+7 more)
 
-### Community 56 - "Package Boundary Tests"
-Cohesion: 0.16
-Nodes (6): PureDomainBoundaryTests, ast, importlib, os, pathlib, sys
+### Community 56 - "RoomPresence"
+Cohesion: 0.24
+Nodes (6): Return the earliest pending pre-match disconnect deadline., Idempotently evict due pre-match players that remain offline., Presence-side use cases layered on a :class:`RoomKernel`., Reconcile one authenticated socket connection., Atomically reconcile a batch of live sockets and any host handoff., RoomPresence
 
-### Community 57 - "Mahjong Product Roadmap"
-Cohesion: 0.22
-Nodes (14): Bao liability, Default fan evaluation, Frozen GameConfig, Full match progression, GameRoom Durable Object, Nine milestone Mahjong roadmap, Opaque action catalogs, PlayerObservation (+6 more)
+### Community 57 - "Nine milestone Mahjong roadmap"
+Cohesion: 0.07
+Nodes (36): Bao liability, Canonical room_state snapshot, Capability gated preview, Default fan evaluation, Frozen GameConfig, Full match progression, GameRoom Durable Object, Nine milestone Mahjong roadmap (+28 more)
 
-### Community 58 - "Visual Design Discovery"
-Cohesion: 0.17
-Nodes (12): Discovery interview, Job and audience, Scope and boundaries, Selected direction, Shape design brief, States and ranges, Approved comp, PRODUCT.md and DESIGN.md (+4 more)
+### Community 58 - "Shape design brief"
+Cohesion: 0.33
+Nodes (6): Discovery interview, Job and audience, Scope and boundaries, Selected direction, Shape design brief, States and ranges
 
-### Community 59 - "Current Preview Architecture"
-Cohesion: 0.21
-Nodes (12): Canonical room_state snapshot, FastAPI Python Worker, Five minute lobby disconnect removal, GAME_ROOM Durable Object, Hibernating WebSockets, Invitation fragment capability, localStorage room credentials, Milestone 3 implementation (+4 more)
+### Community 59 - "Native technical audit"
+Cohesion: 0.25
+Nodes (8): Audit Health Score, Native technical audit, Platform Conformance Verdict, Web technical audit, Craft floor, Rendered quality checks, Evidence and fidelity gate, Finish Reviewer
 
-### Community 60 - "Graphify Incremental Updates"
+### Community 60 - "Graphify incremental updates"
 Cohesion: 0.20
 Nodes (10): AST only updates, CLAUDE.md integration, Graphify project integration, Post commit hook, Changed file detection, Cluster only rebuild, Deleted source pruning, Graphify incremental updates (+2 more)
 
-### Community 61 - "Frontend Session Contracts"
-Cohesion: 0.29
-Nodes (9): AuthenticatedRoomProps, JoinRoomProps, UseInviteCapabilityOptions, UseRoomCommandsOptions, UseRoomSocketOptions, PersistedRoomSession, RoomSession, PlayerRole (+1 more)
-
-### Community 62 - "ZiMo Product Artwork"
-Cohesion: 0.20
-Nodes (10): Capability gated preview, Friends familiar with Singapore Mahjong, One hand draw discard preview, Owner selected mahjong tile artwork, Saved browser room access, ZiMo private Singapore Mahjong, CC0 public domain dedication, FluffyStuff Riichi Mahjong Tiles (+2 more)
-
-### Community 63 - "Canonical State Recovery"
+### Community 61 - "Visualize direction comps"
 Cohesion: 0.33
-Nodes (5): A projected event after the repository assigns its public sequence., StoredAuditEvent, Reconstruct the room from ``room_state`` and no auxiliary table., Validate the public log against canonical room identity and chronology., _validate_stored_event_history()
+Nodes (6): Approved comp, PRODUCT.md and DESIGN.md, Raster plates, Semantic UI controls, Three compositional options, Visualize direction comps
 
-### Community 64 - "Lobby Seat Status"
+### Community 63 - "Q: How does RoomState connect gameplay, privacy, persistence, and recovery?"
+Cohesion: 0.40
+Nodes (4): Answer, Outcome, Q: How does RoomState connect gameplay, privacy, persistence, and recovery?, Source Nodes
+
+### Community 64 - "SeatList.tsx"
 Cohesion: 0.33
 Nodes (7): DisconnectedStatus(), DisconnectedStatusProps, formatCountdown(), remainingDisconnectSeconds(), seatDescription(), SeatList(), PublicSeatView
 
-### Community 65 - "Graphify Extraction Pipeline"
+### Community 65 - "Graphify knowledge graph"
 Cohesion: 0.25
 Nodes (8): Community detection, Graph health diagnostics, Graph report, Graphify knowledge graph, GraphRAG JSON, Interactive HTML, Semantic extraction, Structural AST extraction
 
-### Community 66 - "Local Test Servers"
-Cohesion: 0.29
-Nodes (7): is_server_ready(), main(), Start one or more servers, wait for them to be ready, run a command, then clean…, Wait for server to be ready by polling the port., argparse, socket, subprocess
+### Community 66 - "Q: Trace exactly what information a bot can see"
+Cohesion: 0.40
+Nodes (4): Answer, Outcome, Q: Trace exactly what information a bot can see, Source Nodes
 
-### Community 67 - "Graphify Export Formats"
+### Community 67 - "Graphify exports"
 Cohesion: 0.29
 Nodes (7): FalkorDB, Graphify exports, GraphML, MCP server, Neo4j Cypher, Token reduction benchmark, Wiki export
 
-### Community 68 - "Semantic Extraction Schema"
+### Community 68 - "Semantic extraction schema"
 Cohesion: 0.29
 Nodes (7): AMBIGUOUS confidence, Deterministic node IDs, EXTRACTED confidence, Hyperedges, INFERRED confidence, Semantic extraction schema, Source attribution
 
-### Community 69 - "Knowledge Graph Traversal"
+### Community 69 - "Graphify query traversal"
 Cohesion: 0.29
 Nodes (7): Breadth first traversal, Constrained vocabulary expansion, Depth first traversal, Graphify query traversal, Reflections lessons, Saved query feedback, Shortest path
 
-### Community 70 - "Browser Scope Filters"
+### Community 70 - "live-browser-ignores.js"
 Cohesion: 0.52
 Nodes (6): globToRegex(), matchesScope(), normalizeIgnoreRule(), normalizeIgnoreValue(), pageCandidates(), resolveDetectIgnores()
 
-### Community 72 - "Frontend Design Principles"
+### Community 71 - "test_room_lobby.py"
+Cohesion: 0.12
+Nodes (10): FixedClock, CommandViewResult, Any, DeterministicCapabilities, DeterministicIds, base64, hashlib, json (+2 more)
+
+### Community 72 - "Frontend Design"
 Cohesion: 0.33
 Nodes (6): Apache License 2.0, Copyright and patent grants, Frontend Design, Subject grounded visual identity, Interface clarification, Message hierarchy
 
-### Community 73 - "Typography Assessment"
+### Community 73 - "Typeset typography"
 Cohesion: 0.33
 Nodes (6): Mechanical type scan, Metric compatible fallbacks, Reading measure 45 to 75 characters, Role scale, Typeset typography, Typographic assessment
 
-### Community 74 - "Graphify Ingestion Watching"
+### Community 74 - "Graphify ingestion and watching"
 Cohesion: 0.33
 Nodes (6): AST rebuild, Debounced watcher, Graphify ingestion and watching, Markdown conversion, Semantic update flag, URL ingestion
 
-### Community 75 - "Impeccable Script Setup"
+### Community 75 - "impeccable"
 Cohesion: 0.60
 Nodes (5): impeccable script, check_download(), fetch_url(), probe_ok(), setup_help()
 
-### Community 76 - "Web Testing Practices"
+### Community 76 - "Q: Verify bot hidden-information exclusions directly in source and run relevant tests"
 Cohesion: 0.40
-Nodes (5): Network idle wait, Python Playwright, Rendered DOM reconnaissance, Web Application Testing, CPython Pyodide and workerd testing
+Nodes (4): Answer, Outcome, Q: Verify bot hidden-information exclusions directly in source and run relevant tests, Source Nodes
 
-### Community 77 - "Repository Graph Merging"
+### Community 77 - "Graphify repository merging"
 Cohesion: 0.40
 Nodes (5): Cross repository graph, GitHub clone cache, Graphify repository merging, Per folder extraction, Repository provenance
 
-### Community 78 - "Inline Text Editing"
-Cohesion: 0.40
-Nodes (5): collectEditableTextRows(), visit(), enableInlineEdit(), onInlineInput(), wrapMixedContentTextNodes()
+### Community 78 - "documentRefForElement"
+Cohesion: 0.07
+Nodes (36): addManualContextText(), canRestoreManualEditElement(), collectEditableTextRows(), visit(), collectManualContextPieces(), walk(), contextElementForManualEdit(), copyEditContainerContext() (+28 more)
 
-### Community 79 - "Canonical Model Serialization"
+### Community 79 - ".canonical_data"
 Cohesion: 0.40
 Nodes (3): Any, Return the canonical JSON-ready representation of this model., Serialize with stable key ordering and no insignificant whitespace.
 
-### Community 80 - "CORS Error Handling"
+### Community 80 - "SafeCORSMiddleware"
 Cohesion: 0.40
 Nodes (4): Keep rejected preflights on the same redacted error contract., SafeCORSMiddleware, CORSMiddleware, Headers
 
-### Community 82 - "Worker Probe Fixtures"
+### Community 81 - "RoomServiceError"
+Cohesion: 0.15
+Nodes (12): lobby_service_error(), parse_complete_config(), GameConfig, PublicRoomView, Authenticate for transport preflight without projecting a room view., Project after the caller has already advanced and sampled time., Command-side use cases layered on a :class:`RoomKernel`., RoomCommands (+4 more)
+
+### Community 82 - "worker-probe.mjs"
 Cohesion: 0.70
 Nodes (4): exactJsonBody(), fetch(), jsonTextResponse(), roomStub()
 
-### Community 83 - "Impeccable Agent Interface"
-Cohesion: 0.50
-Nodes (4): Frontend redesign prompt, Impeccable agent interface, Frontend design workflow, Impeccable
+### Community 83 - "Impeccable"
+Cohesion: 0.17
+Nodes (12): Frontend redesign prompt, Impeccable agent interface, Bolder refinement, Scoped amplification, Colorize, Semantic color roles, Craft deprecated alias, Ordinary visual work routing (+4 more)
 
-### Community 84 - "Interface Performance Guidance"
+### Community 84 - "Interface Performance Optimization"
 Cohesion: 0.50
 Nodes (4): Core Web Vitals, Interface Performance Optimization, Progressive Enhancement, Technical Interface Enhancement
 
-### Community 85 - "Apache License Terms"
+### Community 85 - "Apache License 2.0"
 Cohesion: 0.50
 Nodes (4): Apache License 2.0, Copyright license, Patent license, Redistribution notices
 
-### Community 86 - "Media Transcription Pipeline"
+### Community 86 - "Graphify media transcription"
 Cohesion: 0.50
 Nodes (4): Document transcripts, Domain hint prompt, Graphify media transcription, Whisper
 
-### Community 87 - "Project Graph Navigation"
+### Community 87 - "Project graphify rules"
 Cohesion: 0.50
 Nodes (4): Graph first codebase navigation, Post edit graph update, Project graphify rules, Wiki navigation
 
-### Community 89 - "Worker Runtime Exports"
-Cohesion: 0.50
-Nodes (3): Test-only Python Worker exports for Durable Object storage acceptance tests.…, main, time
-
-### Community 90 - "White Dragon Artwork"
+### Community 90 - "White dragon tile"
 Cohesion: 0.50
 Nodes (4): Blank central field, Blue geometric frame, Rounded pale tile with beveled border, White dragon tile
 
-### Community 91 - "Bamboo Flower Artwork"
+### Community 91 - "Bamboo flower tile"
 Cohesion: 0.50
 Nodes (4): Bamboo flower tile, Pink numeral 4, Rounded pale tile with beveled border, Segmented green bamboo
 
-### Community 92 - "Chrysanthemum Flower Artwork"
+### Community 92 - "Chrysanthemum flower tile"
 Cohesion: 0.50
 Nodes (4): Chrysanthemum flower tile, Pink chrysanthemum blossom, Pink numeral 3, Rounded pale tile with beveled border
 
-### Community 93 - "Orchid Flower Artwork"
+### Community 93 - "Orchid flower tile"
 Cohesion: 0.50
 Nodes (4): Green orchid linework, Orchid flower tile, Pink numeral 2, Rounded pale tile with beveled border
 
-### Community 94 - "Plum Flower Artwork"
+### Community 94 - "Plum flower tile"
 Cohesion: 0.50
 Nodes (4): Pink numeral 1, Pink plum blossom, Plum flower tile, Rounded pale tile with beveled border
 
-### Community 95 - "Mouse Tile Artwork"
+### Community 95 - "Mouse animal tile"
 Cohesion: 0.50
 Nodes (4): Blue numeral 2, Green mouse with spiral tail, Mouse animal tile, Rounded pale tile with beveled border
 
-### Community 96 - "Rooster Tile Artwork"
+### Community 96 - "Rooster animal tile"
 Cohesion: 0.50
 Nodes (4): Blue numeral 4, Green rooster with pink comb, Rooster animal tile, Rounded pale tile with beveled border
 
-### Community 97 - "Autumn Season Artwork"
+### Community 97 - "Autumn season tile"
 Cohesion: 0.50
 Nodes (4): Autumn season tile, Blue numeral 3, Green foliage and pink circular motif, Rounded pale tile with beveled border
 
-### Community 98 - "Spring Season Artwork"
+### Community 98 - "Spring season tile"
 Cohesion: 0.50
 Nodes (4): Blue numeral 1, Pink curled spring blossom, Rounded pale tile with beveled border, Spring season tile
 
-### Community 99 - "Summer Season Artwork"
+### Community 99 - "Summer season tile"
 Cohesion: 0.50
 Nodes (4): Blue numeral 2, Pink interlocking floral loops, Rounded pale tile with beveled border, Summer season tile
 
-### Community 100 - "Winter Season Artwork"
+### Community 100 - "Winter season tile"
 Cohesion: 0.50
 Nodes (4): Blue numeral 4, Pink flower and sweeping foliage, Rounded pale tile with beveled border, Winter season tile
 
-### Community 101 - "Five Characters Artwork"
+### Community 101 - "Five Characters Mahjong Tile"
 Cohesion: 0.67
 Nodes (3): Characters Suit, Five Characters Mahjong Tile, Rounded Beveled Tile Face
 
-### Community 102 - "Six Characters Artwork"
+### Community 102 - "Six Characters Mahjong Tile"
 Cohesion: 0.67
 Nodes (3): Characters Suit, Rounded Beveled Tile Face, Six Characters Mahjong Tile
 
-### Community 103 - "Seven Characters Artwork"
+### Community 103 - "Seven Characters Mahjong Tile"
 Cohesion: 0.67
 Nodes (3): Characters Suit, Rounded Beveled Tile Face, Seven Characters Mahjong Tile
 
-### Community 104 - "Eight Characters Artwork"
+### Community 104 - "Eight Characters Mahjong Tile"
 Cohesion: 0.67
 Nodes (3): Characters Suit, Eight Characters Mahjong Tile, Rounded Beveled Tile Face
 
-### Community 105 - "Nine Characters Artwork"
+### Community 105 - "Nine Characters Mahjong Tile"
 Cohesion: 0.67
 Nodes (3): Characters Suit, Nine Characters Mahjong Tile, Rounded Beveled Tile Face
 
-### Community 106 - "One Dot Artwork"
+### Community 106 - "One Dot Mahjong Tile"
 Cohesion: 0.67
 Nodes (3): Dots Suit, One Dot Mahjong Tile, Rounded Beveled Tile Face
 
-### Community 107 - "Two Dots Artwork"
+### Community 107 - "Two Dots Mahjong Tile"
 Cohesion: 0.67
 Nodes (3): Dots Suit, Rounded Beveled Tile Face, Two Dots Mahjong Tile
 
-### Community 108 - "Three Dots Artwork"
+### Community 108 - "Three Dots Mahjong Tile"
 Cohesion: 0.67
 Nodes (3): Dots Suit, Rounded Beveled Tile Face, Three Dots Mahjong Tile
 
-### Community 109 - "Four Dots Artwork"
+### Community 109 - "Four Dots Mahjong Tile"
 Cohesion: 0.67
 Nodes (3): Dots Suit, Four Dots Mahjong Tile, Rounded Beveled Tile Face
 
-### Community 110 - "Five Dots Artwork"
+### Community 110 - "Five Dots Mahjong Tile"
 Cohesion: 0.67
 Nodes (3): Dots Suit, Five Dots Mahjong Tile, Rounded Beveled Tile Face
 
-### Community 111 - "Six Dots Artwork"
+### Community 111 - "Six Dots Mahjong Tile"
 Cohesion: 0.67
 Nodes (3): Dots Suit, Rounded Beveled Tile Face, Six Dots Mahjong Tile
 
-### Community 112 - "Seven Dots Artwork"
+### Community 112 - "Seven Dots Mahjong Tile"
 Cohesion: 0.67
 Nodes (3): Dots Suit, Rounded Beveled Tile Face, Seven Dots Mahjong Tile
 
-### Community 113 - "Eight Dots Artwork"
+### Community 113 - "Eight Dots Mahjong Tile"
 Cohesion: 0.67
 Nodes (3): Dots Suit, Eight Dots Mahjong Tile, Rounded Beveled Tile Face
 
-### Community 114 - "Nine Dots Artwork"
+### Community 114 - "Nine Dots Mahjong Tile"
 Cohesion: 0.67
 Nodes (3): Dots Suit, Nine Dots Mahjong Tile, Rounded Beveled Tile Face
 
-### Community 115 - "Green Dragon Artwork"
+### Community 115 - "Green Dragon Mahjong Tile"
 Cohesion: 0.67
 Nodes (3): Dragon Honor Tiles, Green Dragon Mahjong Tile, Rounded Beveled Tile Face
 
-### Community 116 - "Red Dragon Artwork"
+### Community 116 - "Red Dragon Mahjong Tile"
 Cohesion: 0.67
 Nodes (3): Dragon Honor Tiles, Red Dragon Mahjong Tile, Rounded Beveled Tile Face
 
-### Community 117 - "East Wind Artwork"
+### Community 117 - "East wind tile"
 Cohesion: 0.67
 Nodes (3): Blue East character, East wind tile, Rounded pale tile with beveled border
 
-### Community 118 - "North Wind Artwork"
+### Community 118 - "North wind tile"
 Cohesion: 0.67
 Nodes (3): Blue North character, North wind tile, Rounded pale tile with beveled border
 
-### Community 119 - "South Wind Artwork"
+### Community 119 - "South wind tile"
 Cohesion: 0.67
 Nodes (3): Blue South character, Rounded pale tile with beveled border, South wind tile
 
-### Community 120 - "West Wind Artwork"
+### Community 120 - "West wind tile"
 Cohesion: 0.67
 Nodes (3): Blue West character, Rounded pale tile with beveled border, West wind tile
 
 ## Knowledge Gaps
-- **332 isolated node(s):** `name`, `version`, `private`, `node`, `build` (+327 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 723 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **33 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **337 isolated node(s):** `name`, `version`, `private`, `node`, `build` (+332 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 742 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **24 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `RoomState` connect `Pure Domain Interfaces` to `Lobby State Transitions`, `Mahjong Turn Engine`, `Branded Domain Identities`, `Game State Invariants`, `Gameplay Action Catalogs`, `Automated Seat Controllers`, `Private Player Observations`, `Persistence Validation`, `Persistence Integration Tests`, `Room Kernel Security`, `Room Command Dispatch`, `Atomic Room Commits`, `Domain Actions Events`, `SQLite Schema Migrations`, `Singapore Rules Configuration`, `Audit Record Validation`, `Canonical State Recovery`?**
-  _High betweenness centrality (0.042) - this node is a cross-community bridge._
-- **Why does `Web Application Testing` connect `Web Testing Practices` to `Local Test Servers`?**
-  _High betweenness centrality (0.022) - this node is a cross-community bridge._
-- **Why does `CPython Pyodide and workerd testing` connect `Web Testing Practices` to `Current Preview Architecture`?**
-  _High betweenness centrality (0.022) - this node is a cross-community bridge._
-- **Are the 26 inferred relationships involving `RoomState` (e.g. with `choose_automated_action()` and `_complete_tie()`) actually correct?**
-  _`RoomState` has 26 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 38 inferred relationships involving `SeatId` (e.g. with `Chow` and `Continue`) actually correct?**
-  _`SeatId` has 38 INFERRED edges - model-reasoned connections that need verification._
+- **Why does `RoomState` connect `RoomState` to `PlayerId`, `test_game_milestone3.py`, `model.py`, `test_game_invariant_matrix.py`, `RoomGameplay`, `PolicyId`, `game/__init__.py`, `repository.py`, `RoomRepository`, `RoomKernel`, `kernel.py`, `PlayerPresenceRecord`, `test_persistence.py`, `SeatId`, `schema.py`, `GameConfig`?**
+  _High betweenness centrality (0.045) - this node is a cross-community bridge._
+- **Why does `Milestone 3 implementation` connect `Nine milestone Mahjong roadmap` to `PlayerId`?**
+  _High betweenness centrality (0.016) - this node is a cross-community bridge._
+- **Are the 30 inferred relationships involving `RoomState` (e.g. with `choose_automated_action()` and `_complete_tie()`) actually correct?**
+  _`RoomState` has 30 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 45 inferred relationships involving `SeatId` (e.g. with `Chow` and `Continue`) actually correct?**
+  _`SeatId` has 45 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 18 inferred relationships involving `RoomRepository` (e.g. with `CorruptRoomStateError` and `PlayerProjectionError`) actually correct?**
   _`RoomRepository` has 18 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 10 inferred relationships involving `PlayerId` (e.g. with `ObservationBuilder` and `ProjectionBuilder`) actually correct?**
   _`PlayerId` has 10 INFERRED edges - model-reasoned connections that need verification._
-## Token Accounting Note
-
-Semantic extraction used host-session agents. Actual agent token usage is unavailable through this tool interface; the reported zero counters are placeholders, not a claim of zero token use. AST extraction uses no LLM tokens.
-
-## Graph Health Warning
-
-Read-only extraction diagnostics found 215 dangling-endpoint edges, 30 self-loops, and 479 relationships collapsed in the undirected representation (469 in a directed representation). No missing-endpoint edges. The graph remains usable but may be incomplete; see graph-health.json for full counts.
+- **What connects `name`, `version`, `private` to the rest of the system?**
+  _337 weakly-connected nodes found - possible documentation gaps or missing edges._

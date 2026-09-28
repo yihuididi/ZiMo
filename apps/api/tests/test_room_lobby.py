@@ -114,10 +114,11 @@ class RoomCreationAndAuthenticationTests(RoomOrchestratorTestCase):
                 "drawDiscard",
                 "bonusTiles",
                 "discardWindow",
+                "chow", "pong", "kong3", "kong4",
             ),
         )
-        self.assertEqual(created.view.ruleset_version, "0.2.0")
-        self.assertEqual(created.view.state_schema_version, 3)
+        self.assertEqual(created.view.ruleset_version, "0.3.0")
+        self.assertEqual(created.view.state_schema_version, 4)
 
         player_row = self.connection.execute(
             "SELECT token_hash FROM players WHERE player_id = ?",

@@ -41,14 +41,30 @@ def lobby_service_error(
     error: LobbyDomainError, *, current_revision: int | None = None
 ) -> RoomServiceError:
     mapping = {
-        "INVALID_DISPLAY_NAME": (422, "invalidDisplayName", "The display name is invalid."),
-        "DISPLAY_NAME_TAKEN": (409, "displayNameTaken", "The display name is already in use."),
+        "INVALID_DISPLAY_NAME": (
+            422,
+            "invalidDisplayName",
+            "The display name is invalid.",
+        ),
+        "DISPLAY_NAME_TAKEN": (
+            409,
+            "displayNameTaken",
+            "The display name is already in use.",
+        ),
         "ROOM_FULL": (409, "roomFull", "The room has no open seats."),
         "ROOM_CLOSED": (409, "roomClosed", "The room roster is frozen."),
         "HOST_REQUIRED": (403, "hostRequired", "Host permission is required."),
-        "ACTION_NOT_AVAILABLE": (409, "actionNotAvailable", "The action is not available."),
+        "ACTION_NOT_AVAILABLE": (
+            409,
+            "actionNotAvailable",
+            "The action is not available.",
+        ),
         "PLAYER_NOT_FOUND": (401, "invalidPlayerToken", "Authentication is invalid."),
-        "PLAYER_ID_TAKEN": (409, "playerIdTaken", "The player identity is already in use."),
+        "PLAYER_ID_TAKEN": (
+            409,
+            "playerIdTaken",
+            "The player identity is already in use.",
+        ),
     }
     status, code, message = mapping.get(
         error.code,
@@ -84,12 +100,17 @@ def project_event(event: StoredAuditEvent) -> ProjectedRoomEvent:
         details = {"previousRevision": payload.previous_revision}
     else:  # pragma: no cover
         raise RuntimeError("unsupported stored audit event")
-    return ProjectedRoomEvent(
-        public_sequence=event.public_sequence,
-        revision=event.revision,
-        type=event.event_type,
-        payload=details,
-        created_at_ms=event.created_at_ms,
+    return ProjectedRoomEvent.model_validate_json(
+        canonical_json(
+            {
+                "publicSequence": event.public_sequence,
+                "revision": event.revision,
+                "type": event.event_type,
+                "payload": details,
+                "createdAtMs": event.created_at_ms,
+            }
+        ),
+        strict=True,
     )
 
 
@@ -99,9 +120,7 @@ def stored_command_result(result: CommandResult, *, rotated_invite: bool) -> str
     return canonical_json({"result": result_data, "rotatedInvite": rotated_invite})
 
 
-def command_fingerprint(
-    command_id: str, expected_revision: int, action_id: str
-) -> str:
+def command_fingerprint(command_id: str, expected_revision: int, action_id: str) -> str:
     return hashlib.sha256(
         canonical_json(
             {

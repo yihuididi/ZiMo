@@ -15,6 +15,7 @@ if __package__.startswith("app."):
         Clock,
         ExternalSeatController,
         MilestoneThreeEngine,
+        VersionedPreviewEngine,
         PlayerId,
         PublicRoomView,
         RandomSource,
@@ -45,6 +46,7 @@ else:  # pragma: no cover - Python Workers load modules from the app directory.
         Clock,
         ExternalSeatController,
         MilestoneThreeEngine,
+        VersionedPreviewEngine,
         PlayerId,
         PublicRoomView,
         RandomSource,
@@ -117,7 +119,7 @@ class RoomKernel:
             else policy_selector
         )
         self._game_engine = (
-            MilestoneThreeEngine(self._random_source)
+            VersionedPreviewEngine(self._random_source)
             if game_engine is None
             else game_engine
         )

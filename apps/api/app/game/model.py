@@ -11,6 +11,7 @@ from pydantic_core import core_schema
 from .base import GameModel
 from .capabilities import (
     MILESTONE_3_RULESET_VERSION,
+    MILESTONE_4_RULESET_VERSION,
     MILESTONE_3_STATE_SCHEMA_VERSION,
 )
 from .config import GameConfig
@@ -250,6 +251,7 @@ class SeatState(GameModel):
 
 
 class MeldState(GameModel):
+    kong_kind: Literal["KONG_3", "KONG_4"] | None = None
     kind: MeldKind
     tiles: tuple[PhysicalTile, ...]
     claimed_from_seat_id: SeatId | None = None
@@ -260,7 +262,9 @@ class MeldState(GameModel):
     def validate_size(self) -> "MeldState":
         expected = 4 if self.kind is MeldKind.KONG else 3
         if len(self.tiles) != expected:
-            raise ValueError(f"{self.kind.value} melds require exactly {expected} tiles")
+            raise ValueError(
+                f"{self.kind.value} melds require exactly {expected} tiles"
+            )
         tile_ids = [tile.tile_id for tile in self.tiles]
         if len(tile_ids) != len(set(tile_ids)):
             raise ValueError("a meld cannot contain the same physical tile twice")
@@ -388,10 +392,16 @@ class AwaitingDiscardPhase(GameModel):
 
 
 class DiscardClaimsPhase(GameModel):
+    opening_revision: int | None = Field(default=None, ge=0)
     type: Literal["discardClaims"] = "discardClaims"
     window_id: WindowId = Field(min_length=1)
     discard_sequence: int = Field(ge=1)
     eligible_seat_ids: tuple[SeatId, ...] = ()
+
+
+class FinalTileDecisionPhase(GameModel):
+    type: Literal["finalTileDecision"] = "finalTileDecision"
+    seat_id: SeatId = Field(min_length=1)
 
 
 class KongReplacementPhase(GameModel):
@@ -416,6 +426,7 @@ HandPhase = Annotated[
     | AwaitingDiscardPhase
     | DiscardClaimsPhase
     | KongReplacementPhase
+    | FinalTileDecisionPhase
     | KongRobberyPhase
     | CompletePhase,
     Field(discriminator="type"),
@@ -423,6 +434,8 @@ HandPhase = Annotated[
 
 
 class PlayerHand(GameModel):
+    passed_pong_faces: tuple[TileFace, ...] = ()
+    last_discard_face: TileFace | None = None
     seat_id: SeatId = Field(min_length=1)
     concealed_tiles: tuple[PhysicalTile, ...] = ()
     drawn_tile: PhysicalTile | None = None
@@ -508,9 +521,7 @@ def _validate_hand_shape_and_sequences(hand: HandState) -> tuple[SeatId, ...]:
     return seat_ids
 
 
-def _validate_hand_phase_references(
-    hand: HandState, seat_id_set: set[SeatId]
-) -> None:
+def _validate_hand_phase_references(hand: HandState, seat_id_set: set[SeatId]) -> None:
     if any(
         discard.discarded_by_seat_id not in seat_id_set
         or (
@@ -523,7 +534,12 @@ def _validate_hand_phase_references(
     phase_seat_ids: tuple[SeatId, ...]
     if isinstance(
         hand.phase,
-        (AwaitingDrawPhase, AwaitingDiscardPhase, KongReplacementPhase),
+        (
+            AwaitingDrawPhase,
+            AwaitingDiscardPhase,
+            KongReplacementPhase,
+            FinalTileDecisionPhase,
+        ),
     ):
         phase_seat_ids = (hand.phase.seat_id,)
     elif isinstance(hand.phase, DiscardClaimsPhase):
@@ -540,8 +556,7 @@ def _validate_hand_phase_references(
     if len(phase_seat_ids) != len(set(phase_seat_ids)):
         raise ValueError("hand phase seat IDs must be unique")
     if isinstance(hand.phase, DiscardClaimsPhase) and (
-        not hand.discards
-        or hand.phase.discard_sequence != hand.discards[-1].sequence
+        not hand.discards or hand.phase.discard_sequence != hand.discards[-1].sequence
     ):
         raise ValueError("discard claim phase must identify the current ledger discard")
 
@@ -658,7 +673,9 @@ def _validate_claimed_meld_provenance(
                 continue
             discard = discards_by_sequence.get(meld.discard_sequence)
             if discard is None:
-                raise ValueError("claimed meld provenance references an unknown discard")
+                raise ValueError(
+                    "claimed meld provenance references an unknown discard"
+                )
             if meld.discard_sequence in claimed_meld_sequences:
                 raise ValueError(
                     "a ledger discard cannot provide more than one claimed meld"
@@ -739,9 +756,10 @@ class MatchState(GameModel):
         if self.dealer_seat_id is not None and self.dealer_seat_id not in set(seat_ids):
             raise ValueError("dealer_seat_id must identify a match seat")
         seat_id_set = set(seat_ids)
-        if self.current_hand is not None and {
-            hand.seat_id for hand in self.current_hand.player_hands
-        } != seat_id_set:
+        if (
+            self.current_hand is not None
+            and {hand.seat_id for hand in self.current_hand.player_hands} != seat_id_set
+        ):
             raise ValueError("current hand seats must match match balances")
         for result in self.hand_history:
             if any(
@@ -803,8 +821,8 @@ class MatchState(GameModel):
 class RoomState(GameModel):
     room_id: RoomId = Field(min_length=1)
     ruleset_id: Literal["singapore"] = "singapore"
-    ruleset_version: Literal["0.1.0", "0.2.0"] = "0.1.0"
-    state_schema_version: Literal[2, 3] = 2
+    ruleset_version: Literal["0.1.0", "0.2.0", "0.3.0"] = "0.1.0"
+    state_schema_version: Literal[2, 3, 4] = 2
     revision: int = Field(default=0, ge=0)
     config: GameConfig = Field(default_factory=GameConfig)
     status: RoomStatus = RoomStatus.CREATED
@@ -822,10 +840,28 @@ class RoomState(GameModel):
             raise ValueError(
                 "Singapore preview cannot serialize unsupported game configuration"
             )
-        return super().canonical_data()
+        data = super().canonical_data()
+        # Keep byte-canonical legacy snapshots readable without rewriting them.
+        if (
+            self.ruleset_version != MILESTONE_4_RULESET_VERSION
+            and self.match is not None
+        ):
+            hand = data["match"]["currentHand"]
+            if hand is not None:
+                hand["phase"].pop("openingRevision", None)
+                for player in hand["playerHands"]:
+                    player.pop("passedPongFaces", None)
+                    player.pop("lastDiscardFace", None)
+                    for meld in player["melds"]:
+                        meld.pop("kongKind", None)
+        return data
 
     @model_validator(mode="after")
     def validate_room(self) -> "RoomState":
+        if (self.ruleset_version == MILESTONE_4_RULESET_VERSION) != (
+            self.state_schema_version == 4
+        ):
+            raise ValueError("milestone four requires state schema 4")
         if (
             self.ruleset_version == MILESTONE_3_RULESET_VERSION
             and self.state_schema_version != MILESTONE_3_STATE_SCHEMA_VERSION
@@ -875,9 +911,8 @@ class RoomState(GameModel):
                 raise ValueError("IN_MATCH rooms require a pending or active match")
             if any(seat.controller is None for seat in self.seats):
                 raise ValueError("IN_MATCH rooms require four occupied seats")
-            if (
-                self.match.status is MatchStatus.PENDING_SETUP
-                and any(not player.ready for player in self.players)
+            if self.match.status is MatchStatus.PENDING_SETUP and any(
+                not player.ready for player in self.players
             ):
                 raise ValueError(
                     "a pending-setup match requires every human player ready"
@@ -907,7 +942,10 @@ class RoomState(GameModel):
         } != set(seat_ids):
             raise ValueError("match seats must match the room's stable seats")
         if self.pending_deadline is not None:
-            if self.ruleset_version != MILESTONE_3_RULESET_VERSION:
+            if self.ruleset_version not in {
+                MILESTONE_3_RULESET_VERSION,
+                MILESTONE_4_RULESET_VERSION,
+            }:
                 raise ValueError("only the draw/discard preview may have a deadline")
             hand = self.match.current_hand if self.match is not None else None
             if (

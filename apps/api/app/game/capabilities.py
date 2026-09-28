@@ -9,6 +9,9 @@ MILESTONE_2_RULESET_VERSION = "0.1.0"
 MILESTONE_3_RULESET_VERSION = "0.2.0"
 MILESTONE_3_STATE_SCHEMA_VERSION = 3
 
+MILESTONE_4_RULESET_VERSION = "0.3.0"
+MILESTONE_4_STATE_SCHEMA_VERSION = 4
+
 RoomCapability: TypeAlias = Literal[
     "multiplayerLobby",
     "roomEvents",
@@ -16,6 +19,10 @@ RoomCapability: TypeAlias = Literal[
     "drawDiscard",
     "bonusTiles",
     "discardWindow",
+    "chow",
+    "pong",
+    "kong3",
+    "kong4",
 ]
 
 MILESTONE_2_CAPABILITIES: tuple[RoomCapability, ...] = (
@@ -31,9 +38,20 @@ MILESTONE_3_CAPABILITIES: tuple[RoomCapability, ...] = (
 )
 
 
+MILESTONE_4_CAPABILITIES: tuple[RoomCapability, ...] = (
+    *MILESTONE_3_CAPABILITIES,
+    "chow",
+    "pong",
+    "kong3",
+    "kong4",
+)
+
+
 def capabilities_for_ruleset_version(
     ruleset_version: str,
 ) -> tuple[RoomCapability, ...]:
+    if ruleset_version == MILESTONE_4_RULESET_VERSION:
+        return MILESTONE_4_CAPABILITIES
     if ruleset_version == MILESTONE_2_RULESET_VERSION:
         return MILESTONE_2_CAPABILITIES
     if ruleset_version == MILESTONE_3_RULESET_VERSION:
@@ -42,6 +60,9 @@ def capabilities_for_ruleset_version(
 
 
 __all__ = [
+    "MILESTONE_4_CAPABILITIES",
+    "MILESTONE_4_RULESET_VERSION",
+    "MILESTONE_4_STATE_SCHEMA_VERSION",
     "MILESTONE_2_CAPABILITIES",
     "MILESTONE_2_RULESET_VERSION",
     "MILESTONE_3_CAPABILITIES",

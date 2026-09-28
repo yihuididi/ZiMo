@@ -8,9 +8,17 @@ from dataclasses import replace
 from typing import Any
 
 if __package__ == "persistence":  # Python Workers load from the app directory.
-    from game import RoomState, validate_milestone_three_room
+    from game import (
+        RoomState,
+        validate_milestone_three_room,
+        validate_milestone_four_room,
+    )
 else:
-    from ..game import RoomState, validate_milestone_three_room
+    from ..game import (
+        RoomState,
+        validate_milestone_three_room,
+        validate_milestone_four_room,
+    )
 
 from .errors import CorruptRoomStateError, PlayerProjectionError
 from .records import (
@@ -64,9 +72,7 @@ def _record_from_state(state: RoomState) -> RoomStateRecord:
     if validated_snapshot_json != snapshot_json:
         raise ValueError("RoomState canonical JSON changed after strict validation")
     if not _strict_value_equivalent(validated_state, state):
-        raise ValueError(
-            "RoomState differs from its strict canonical reconstruction"
-        )
+        raise ValueError("RoomState differs from its strict canonical reconstruction")
     if str(validated_state.ruleset_version) == "0.2.0":
         try:
             validate_milestone_three_room(
@@ -77,19 +83,19 @@ def _record_from_state(state: RoomState) -> RoomStateRecord:
             raise ValueError(
                 "canonical preview state failed milestone-three validation"
             ) from exc
+    if validated_state.ruleset_version == "0.3.0":
+        validate_milestone_four_room(validated_state, require_deadline=True)
     _validate_persisted_gameplay_deadline(validated_state)
 
     room_id = _identity_text(validated_state.room_id, "room_id")
     ruleset_id = _identity_text(validated_state.ruleset_id, "ruleset_id")
-    ruleset_version = _identity_text(
-        validated_state.ruleset_version, "ruleset_version"
-    )
+    ruleset_version = _identity_text(validated_state.ruleset_version, "ruleset_version")
     state_schema_version = _require_positive_int(
         validated_state.state_schema_version, "state_schema_version"
     )
-    if state_schema_version != 3:
+    if state_schema_version not in {3, 4}:
         raise ValueError(
-            "canonical room persistence requires state_schema_version 3"
+            "canonical room persistence requires state_schema_version 3 or 4"
         )
     revision = _require_non_negative_int(validated_state.revision, "revision")
     created_at_ms = _require_non_negative_int(
@@ -118,7 +124,7 @@ def _record_from_state(state: RoomState) -> RoomStateRecord:
 def _validate_persisted_gameplay_deadline(state: RoomState) -> None:
     """Require complete alarm metadata at the canonical persistence boundary."""
 
-    if str(state.ruleset_version) != "0.2.0":
+    if str(state.ruleset_version) not in {"0.2.0", "0.3.0"}:
         return
     hand = state.match.current_hand if state.match is not None else None
     phase = None if hand is None else hand.phase
@@ -243,9 +249,7 @@ def _validate_stored_event_history(
     committed_revisions: set[int] = set()
     for expected_sequence, event in enumerate(events, start=1):
         if event.public_sequence != expected_sequence:
-            raise CorruptRoomStateError(
-                "public audit event sequence is not contiguous"
-            )
+            raise CorruptRoomStateError("public audit event sequence is not contiguous")
         if event.payload.room_id != canonical.room_id:
             raise CorruptRoomStateError(
                 "audit payload room_id does not match canonical room state"
@@ -259,13 +263,9 @@ def _validate_stored_event_history(
                 "audit event revision exceeds canonical room revision"
             )
         if event.revision < previous_revision:
-            raise CorruptRoomStateError(
-                "audit event revisions are not chronological"
-            )
+            raise CorruptRoomStateError("audit event revisions are not chronological")
         if event.created_at_ms < previous_created_at_ms:
-            raise CorruptRoomStateError(
-                "audit event timestamps are not chronological"
-            )
+            raise CorruptRoomStateError("audit event timestamps are not chronological")
 
         if type(event.payload) is RoomInitializedAuditPayload:
             if initialized_seen or expected_sequence != 1:
@@ -556,9 +556,7 @@ def _validate_security_references(
     allowed_command_player_ids: set[str],
 ) -> None:
     active = {
-        player.player_id: player
-        for player in players
-        if player.left_at_ms is None
+        player.player_id: player for player in players if player.left_at_ms is None
     }
     for command in commands:
         if command.player_id not in allowed_command_player_ids:
@@ -569,9 +567,7 @@ def _validate_security_references(
     for ticket in tickets:
         player = active.get(ticket.player_id)
         if player is None:
-            raise PlayerProjectionError(
-                "socket ticket must reference an active player"
-            )
+            raise PlayerProjectionError("socket ticket must reference an active player")
         if ticket.auth_generation != player.auth_generation:
             raise PlayerProjectionError(
                 "socket ticket auth_generation must match its active player"
@@ -583,9 +579,7 @@ def _validate_presence_references(
     players: Sequence[PlayerRecord],
 ) -> None:
     active = {
-        player.player_id: player
-        for player in players
-        if player.left_at_ms is None
+        player.player_id: player for player in players if player.left_at_ms is None
     }
     seen_ids: set[str] = set()
     for presence in records:

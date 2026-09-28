@@ -110,7 +110,7 @@ export function LobbyView({
                 <p>
                   This room was started with ruleset v{view.rulesetVersion},
                   before draw/discard play was enabled. Its roster and rules
-                  remain locked; create a new room for the Milestone 3 preview.
+                  remain locked; create a new room for the latest preview.
                 </p>
               </section>
             )}

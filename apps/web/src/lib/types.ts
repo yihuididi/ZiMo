@@ -14,7 +14,8 @@ export type RoomCapability =
   | "hibernatingWebSockets"
   | "drawDiscard"
   | "bonusTiles"
-  | "discardWindow";
+  | "discardWindow"
+  | "chow" | "pong" | "kong3" | "kong4";
 
 export type TileRank = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 export type BonusNumber = 1 | 2 | 3 | 4;
@@ -49,6 +50,7 @@ export type MeldKind = "CHOW" | "PONG" | "KONG";
 export type ClaimKind = MeldKind | "WIN" | "PASS";
 
 export interface PublicExposedMeldView {
+  kongKind?: "KONG_3" | "KONG_4" | null;
   visibility: "exposed";
   kind: MeldKind;
   tiles: PublicTileView[];
@@ -81,7 +83,8 @@ export type PhaseType =
   | "discardClaims"
   | "kongReplacement"
   | "kongRobbery"
-  | "complete";
+  | "complete"
+  | "finalTileDecision";
 
 export interface PhaseObservation {
   type: PhaseType;
@@ -161,7 +164,10 @@ export interface OpaqueActionDescriptor {
     | "roomActions"
     | "invitation"
     | "concealedTile"
-    | "drawnTile";
+    | "drawnTile"
+    | "claimActions"
+    | "turnActions";
+  tiles?: PublicTileView[];
   presentationIndex?: number | null;
 }
 
@@ -208,6 +214,7 @@ export interface OpponentSeatView extends BaseSeatView {
 export type PublicSeatView = SelfSeatView | OpponentSeatView;
 
 export interface PublicGameView {
+  ownClaimSubmitted?: boolean;
   status: "PENDING_SETUP" | "ACTIVE" | "FINISHED";
   prevailingWind: Wind;
   dealerSeatId: string | null;

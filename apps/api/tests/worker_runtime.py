@@ -13,7 +13,7 @@ import time
 from collections.abc import Mapping
 from typing import Any
 
-from game import MilestoneThreeEngine
+from game import VersionedPreviewEngine
 from main import Default, GameRoom
 
 
@@ -84,7 +84,7 @@ class TestGameRoom(GameRoom):
         self._test_random = _ZeroRandomSource()
         self._orchestrator._clock = self._test_clock
         self._orchestrator._random_source = self._test_random
-        self._orchestrator._game_engine = MilestoneThreeEngine(
+        self._orchestrator._game_engine = VersionedPreviewEngine(
             self._test_random
         )
 

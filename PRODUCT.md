@@ -12,7 +12,7 @@ The primary audience is friends who already know Singapore Mahjong, confirmed by
 
 ## Product Purpose
 
-ZiMo provides a private Singapore Mahjong table in a web browser where friends can join a room and play alongside bots. The current implementation is a one-hand draw/discard preview, not a complete Mahjong game.
+ZiMo provides a private Singapore Mahjong table in a web browser where friends can join a room and play alongside bots. The current implementation is a one-hand claims/melds preview, not a complete Mahjong game.
 
 ## Operating Context
 
@@ -27,7 +27,8 @@ The following describes the current implementation documented in README.md, rath
 - Room and game state are controlled by the server and updated in real time.
 - Draws and bonus-tile replacements happen automatically; the player chooses a discard.
 - Each discard opens a three-second resolution window.
-- Claims, melds, wins, scoring, payments, settings, and additional hands are unavailable in the current preview. Do not present them as implemented.
+- Chow, Pong, Kong-3, Kong-4, and Pass are available in new rooms. Claim choices are final and resolve after the full three-second window. Kong-4 faces are public.
+- Game, Kong-1, scoring, payments, settings, and additional hands remain unavailable. Do not present them as implemented.
 
 Open decisions: relative priority of convenient private play versus rules completeness and familiar table interactions; future feature scope; product-specific accessibility requirements; and any competitive positioning or success metrics.
 

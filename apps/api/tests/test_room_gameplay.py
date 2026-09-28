@@ -4,6 +4,8 @@ import base64
 import json
 import sqlite3
 import unittest
+from unittest.mock import patch
+from app.lobby import create_lobby_room
 
 from app.game import MatchStatus, PendingDeadline, RoomStatus
 from app.persistence import RoomRepository
@@ -75,6 +77,12 @@ def action_for_slot(view, slot: str):  # type: ignore[no-untyped-def]
 
 class RoomGameplayTests(unittest.TestCase):
     def setUp(self) -> None:
+        # Regression suite remains pinned to the original draw/discard rules.
+        def legacy_room(*args, **kwargs):
+            return create_lobby_room(*args, **kwargs).model_copy(update={"ruleset_version": "0.2.0", "state_schema_version": 3})
+        patcher = patch("app.room.commands.create_lobby_room", side_effect=legacy_room)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.connection = sqlite3.connect(":memory:")
         self.repository = RoomRepository.from_sqlite(self.connection)
         self.repository.initialize_schema(applied_at_ms=900)

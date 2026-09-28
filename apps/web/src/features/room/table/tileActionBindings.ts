@@ -1,11 +1,11 @@
 import type { OpaqueActionDescriptor } from "../../../lib/types";
 
-export type GameplayPresentationSlot = "concealedTile" | "drawnTile";
+export type GameplayPresentationSlot = "concealedTile" | "drawnTile" | "claimActions" | "turnActions";
 
 export function isGameplayPresentationSlot(
   slot: OpaqueActionDescriptor["presentationSlot"],
 ): slot is GameplayPresentationSlot {
-  return slot === "concealedTile" || slot === "drawnTile";
+  return slot === "concealedTile" || slot === "drawnTile" || slot === "claimActions" || slot === "turnActions";
 }
 
 export interface TileActionBindings {

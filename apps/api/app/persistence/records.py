@@ -53,9 +53,7 @@ class PlayerRecord:
             self, "player_id", _identity_text(self.player_id, "player_id")
         )
         if self.seat_id is not None:
-            object.__setattr__(
-                self, "seat_id", _identity_text(self.seat_id, "seat_id")
-            )
+            object.__setattr__(self, "seat_id", _identity_text(self.seat_id, "seat_id"))
         _validate_player(self)
         object.__setattr__(
             self,
@@ -133,6 +131,8 @@ _GAMEPLAY_AUDIT_EVENT_TYPES = frozenset(
         "bonusExposed",
         "tileDiscarded",
         "previewTied",
+        "claimResolved",
+        "meldDeclared",
     }
 )
 
@@ -412,7 +412,13 @@ def _validate_public_gameplay_event_details(
 ) -> None:
     """Reject private engine material even when it is JSON-scalar."""
 
-    _validate_public_event_details(value)
+    _validate_public_event_details(
+        {
+            k: v
+            for k, v in value.items()
+            if not (event_type == "meldDeclared" and k == "tiles")
+        }
+    )
     forbidden_fragments = (
         "tileid",
         "physical",
@@ -443,6 +449,15 @@ def _validate_public_gameplay_event_details(
             "tileValue",
         },
         "previewTied": {"outcome", "reason"},
+        "claimResolved": {"discardSequence", "seatId", "claimKind"},
+        "meldDeclared": {
+            "seatId",
+            "kind",
+            "kongKind",
+            "tiles",
+            "claimedFromSeatId",
+            "discardSequence",
+        },
     }[event_type]
     if set(value) != expected_keys:
         raise ValueError("public gameplay details do not match their allow-list")
@@ -461,6 +476,35 @@ def _validate_public_gameplay_event_details(
         _require_text(value["tileFamily"], "tileFamily")
         if type(value["tileValue"]) not in {str, int}:
             raise ValueError("tileDiscarded tileValue must be a string or integer")
+    elif event_type == "claimResolved":
+        _require_positive_int(value["discardSequence"], "discardSequence")
+        _require_text(value["seatId"], "seatId")
+        if value["claimKind"] not in {"CHOW", "PONG", "KONG"}:
+            raise ValueError("invalid resolved claim kind")
+    elif event_type == "meldDeclared":
+        _require_text(value["seatId"], "seatId")
+        if value["kind"] not in {"CHOW", "PONG", "KONG"} or value["kongKind"] not in {
+            None,
+            "KONG_3",
+            "KONG_4",
+        }:
+            raise ValueError("invalid meld kind")
+        expected_size = 4 if value["kind"] == "KONG" else 3
+        if not isinstance(value["tiles"], list) or len(value["tiles"]) != expected_size:
+            raise ValueError("invalid public meld tiles")
+        for tile in value["tiles"]:
+            if (
+                not isinstance(tile, dict)
+                or set(tile) != {"face"}
+                or not isinstance(tile["face"], dict)
+                or set(tile["face"]) != {"family", "value"}
+            ):
+                raise ValueError("invalid public tile shape")
+        if value["claimedFromSeatId"] is not None:
+            _require_text(value["claimedFromSeatId"], "claimedFromSeatId")
+            _require_positive_int(value["discardSequence"], "discardSequence")
+        elif value["discardSequence"] is not None:
+            raise ValueError("invalid meld provenance")
     elif value != {"outcome": "TIE", "reason": "LIVE_WALL_EXHAUSTED"}:
         raise ValueError("previewTied details are not allow-listed")
 
@@ -630,9 +674,7 @@ def _require_sha256_hex(value: Any, name: str) -> str:
     if len(result) != 64 or any(
         character not in "0123456789abcdef" for character in result
     ):
-        raise ValueError(
-            f"{name} must be exactly 64 lowercase hexadecimal characters"
-        )
+        raise ValueError(f"{name} must be exactly 64 lowercase hexadecimal characters")
     return result
 
 

@@ -146,13 +146,13 @@ class GameConfigTests(unittest.TestCase):
     def test_singapore_metadata_and_capability_gate(self) -> None:
         rules = SingaporeRules()
         self.assertEqual(rules.ruleset_id, "singapore")
-        self.assertEqual(rules.ruleset_version, "0.2.0")
-        self.assertEqual(rules.state_schema_version, 3)
+        self.assertEqual(rules.ruleset_version, "0.3.0")
+        self.assertEqual(rules.state_schema_version, 4)
         self.assertEqual(rules.seat_count, 4)
         self.assertEqual(rules.tile_count, 148)
         self.assertEqual(rules.reserve_tile_count, 15)
         self.assertEqual(rules.claim_window_ms, 3000)
-        self.assertEqual(rules.capabilities, MILESTONE_3_CAPABILITIES)
+        self.assertEqual(rules.capabilities, (*MILESTONE_3_CAPABILITIES, "chow", "pong", "kong3", "kong4"))
         self.assertEqual(rules.configurable_fields, ())
 
         legacy = SingaporeRules(

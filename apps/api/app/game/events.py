@@ -46,6 +46,8 @@ class BonusExposed(GameModel):
 
 
 class DiscardWindowResolved(GameModel):
+    winning_seat_id: SeatId | None = None
+    claim_kind: ClaimKind | None = None
     type: Literal["discardWindowResolved"] = "discardWindowResolved"
     window_id: WindowId = Field(min_length=1)
     discard_sequence: int = Field(ge=1)

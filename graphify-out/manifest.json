@@ -14,8 +14,8 @@
   ".agents/skills/impeccable/scripts/data/font-index.json": {
     "mtime": 1790319588.0434892,
     "seen": 1790329526.1297321,
-    "ast_hash": "4a4426c85ec12df1d9a487a39d656ff4",
-    "semantic_hash": "4a4426c85ec12df1d9a487a39d656ff4"
+    "ast_hash": "",
+    "semantic_hash": ""
   },
   ".agents/skills/impeccable/scripts/impeccable": {
     "mtime": 1790319588.0437016,
@@ -96,22 +96,22 @@
     "semantic_hash": "d791a0432945eadf1eabe53e6d5f3938"
   },
   "apps/api/app/durable_room.py": {
-    "mtime": 1787145218.0610173,
-    "seen": 1790329526.12974,
-    "ast_hash": "8dd592684cb0f192adf765c6f99f0741",
-    "semantic_hash": "8dd592684cb0f192adf765c6f99f0741"
+    "mtime": 1790588856.3256032,
+    "seen": 1790589057.7210398,
+    "ast_hash": "d1689b65df75246a75e3dd82a8101816",
+    "semantic_hash": ""
   },
   "apps/api/app/game/__init__.py": {
-    "mtime": 1787145168.533412,
-    "seen": 1790329526.12974,
-    "ast_hash": "57e290e7b9f1d3675c0462d25a3b232f",
-    "semantic_hash": "57e290e7b9f1d3675c0462d25a3b232f"
+    "mtime": 1790588856.1256175,
+    "seen": 1790589057.721041,
+    "ast_hash": "4a7db94ad7cfeda05270e00325ee9d7d",
+    "semantic_hash": ""
   },
   "apps/api/app/game/actions.py": {
-    "mtime": 1786808828.5496223,
-    "seen": 1790329526.12974,
-    "ast_hash": "5df2a583f5a40ab58bc5cb9aa3fbef08",
-    "semantic_hash": "5df2a583f5a40ab58bc5cb9aa3fbef08"
+    "mtime": 1790586966.5205276,
+    "seen": 1790589057.721042,
+    "ast_hash": "4d04e82c1013842db0a65a1370c36bce",
+    "semantic_hash": ""
   },
   "apps/api/app/game/base.py": {
     "mtime": 1786808828.5498233,
@@ -120,10 +120,10 @@
     "semantic_hash": "d31f8f060adc31178e5b5cfd56126c46"
   },
   "apps/api/app/game/capabilities.py": {
-    "mtime": 1787144445.5702748,
-    "seen": 1790329526.129741,
-    "ast_hash": "c4d73a9e9f1b5306787e6c09992ce48f",
-    "semantic_hash": "c4d73a9e9f1b5306787e6c09992ce48f"
+    "mtime": 1790588856.0959184,
+    "seen": 1790589057.721075,
+    "ast_hash": "6319339b403fa25602b2b7f97f26a350",
+    "semantic_hash": ""
   },
   "apps/api/app/game/config.py": {
     "mtime": 1786808828.550231,
@@ -132,10 +132,10 @@
     "semantic_hash": "6457df1f79ade5c8cb3b4e85326e468e"
   },
   "apps/api/app/game/controllers.py": {
-    "mtime": 1787145130.7238712,
-    "seen": 1790329526.1297421,
-    "ast_hash": "ce2294d7ddc0026b25ea4d35413d7f1a",
-    "semantic_hash": "ce2294d7ddc0026b25ea4d35413d7f1a"
+    "mtime": 1790587227.2614062,
+    "seen": 1790589057.721109,
+    "ast_hash": "125bf1e4b56b1fb6e324aee73d132f58",
+    "semantic_hash": ""
   },
   "apps/api/app/game/effects.py": {
     "mtime": 1787144225.2989433,
@@ -144,40 +144,40 @@
     "semantic_hash": "4aaa76546882cdb657afd9ee25360f73"
   },
   "apps/api/app/game/engine.py": {
-    "mtime": 1787146505.88457,
-    "seen": 1790329526.129743,
-    "ast_hash": "58679acfb5c1ba5bd7b4126e16bb3a9a",
-    "semantic_hash": "58679acfb5c1ba5bd7b4126e16bb3a9a"
+    "mtime": 1790588856.5083873,
+    "seen": 1790589057.72114,
+    "ast_hash": "eaf0fdc8f7de9b84cf416bbaf376d93f",
+    "semantic_hash": ""
   },
   "apps/api/app/game/events.py": {
-    "mtime": 1787144225.353233,
-    "seen": 1790329526.1297438,
-    "ast_hash": "f775efefbe0a24ba2b2b2c45e0dd4a82",
-    "semantic_hash": "f775efefbe0a24ba2b2b2c45e0dd4a82"
+    "mtime": 1790586966.520847,
+    "seen": 1790589057.721141,
+    "ast_hash": "b1172c578b3350b911c29bf6bc3b8796",
+    "semantic_hash": ""
   },
   "apps/api/app/game/model.py": {
-    "mtime": 1787146015.2384858,
-    "seen": 1790329526.1297438,
-    "ast_hash": "3b37cebbf83cf2053df94416eb7c94a0",
-    "semantic_hash": "3b37cebbf83cf2053df94416eb7c94a0"
+    "mtime": 1790588856.556712,
+    "seen": 1790589057.721142,
+    "ast_hash": "901ef809ad45791cc5b05e701d773c59",
+    "semantic_hash": ""
   },
   "apps/api/app/game/observation.py": {
-    "mtime": 1787144989.9160798,
-    "seen": 1790329526.129745,
-    "ast_hash": "f316e3a625cb9d401de8405caee40c7a",
-    "semantic_hash": "f316e3a625cb9d401de8405caee40c7a"
+    "mtime": 1790586966.5212362,
+    "seen": 1790589057.721143,
+    "ast_hash": "3eac03c1409948cb79593b6b8673e5d6",
+    "semantic_hash": ""
   },
   "apps/api/app/game/projection.py": {
-    "mtime": 1787146172.4986525,
-    "seen": 1790329526.129745,
-    "ast_hash": "672c2d030523d96122481ee0060cce21",
-    "semantic_hash": "672c2d030523d96122481ee0060cce21"
+    "mtime": 1790586966.5220478,
+    "seen": 1790589057.721143,
+    "ast_hash": "a793adc2ba3af085ac6c3277002d6401",
+    "semantic_hash": ""
   },
   "apps/api/app/game/public.py": {
-    "mtime": 1786808828.5517168,
-    "seen": 1790329526.129746,
-    "ast_hash": "0ddea53918c1463f833ccb81e099d6fc",
-    "semantic_hash": "0ddea53918c1463f833ccb81e099d6fc"
+    "mtime": 1790586966.5217013,
+    "seen": 1790589057.721144,
+    "ast_hash": "d8177b94e214b313d18805b117503f20",
+    "semantic_hash": ""
   },
   "apps/api/app/game/rules/__init__.py": {
     "mtime": 1787145097.238079,
@@ -186,10 +186,10 @@
     "semantic_hash": "de03a110c8a22fccf13e5d9768e4fd96"
   },
   "apps/api/app/game/rules/singapore.py": {
-    "mtime": 1787146505.9805567,
-    "seen": 1790329526.129746,
-    "ast_hash": "2470f602cd7a5125d1198d62f1d097f2",
-    "semantic_hash": "2470f602cd7a5125d1198d62f1d097f2"
+    "mtime": 1790588856.1452117,
+    "seen": 1790589057.721181,
+    "ast_hash": "94066fbb1d3d4ecde305f9355137b2d2",
+    "semantic_hash": ""
   },
   "apps/api/app/game/runtime.py": {
     "mtime": 1786808828.5522501,
@@ -228,10 +228,10 @@
     "semantic_hash": "781bebbd34bce7233ea68a4e2dd0845f"
   },
   "apps/api/app/lobby/state.py": {
-    "mtime": 1787144291.4329712,
-    "seen": 1790329526.12975,
-    "ast_hash": "0411484bfff391917a6b37cdf296d5aa",
-    "semantic_hash": "0411484bfff391917a6b37cdf296d5aa"
+    "mtime": 1790587227.260585,
+    "seen": 1790589057.721368,
+    "ast_hash": "6afc4bb8c47cc1d70a4922fa48b9e65e",
+    "semantic_hash": ""
   },
   "apps/api/app/lobby/types.py": {
     "mtime": 1787066384.5065138,
@@ -264,10 +264,10 @@
     "semantic_hash": "6f404259424942e2441108ce96dbdbe2"
   },
   "apps/api/app/persistence/records.py": {
-    "mtime": 1787144825.2156007,
-    "seen": 1790329526.129753,
-    "ast_hash": "403b12bcee460fcaf7d595b7621e97a3",
-    "semantic_hash": "403b12bcee460fcaf7d595b7621e97a3"
+    "mtime": 1790588856.383539,
+    "seen": 1790589057.721523,
+    "ast_hash": "20036a68bf4068fb58532dda73b74581",
+    "semantic_hash": ""
   },
   "apps/api/app/persistence/repository.py": {
     "mtime": 1787144249.0273664,
@@ -288,10 +288,10 @@
     "semantic_hash": "06cfcd748d7bd2a4048d4268e9c8908a"
   },
   "apps/api/app/persistence/validation.py": {
-    "mtime": 1787145199.094135,
-    "seen": 1790329526.129754,
-    "ast_hash": "379ec647398dc90f1604266ea3d9e99b",
-    "semantic_hash": "379ec647398dc90f1604266ea3d9e99b"
+    "mtime": 1790588856.3321886,
+    "seen": 1790589057.72162,
+    "ast_hash": "03c9ee3a851fb82a250728226a418889",
+    "semantic_hash": ""
   },
   "apps/api/app/room/__init__.py": {
     "mtime": 1787066377.7224317,
@@ -300,34 +300,34 @@
     "semantic_hash": "5281d61ab609240a01b1de0c301e13ba"
   },
   "apps/api/app/room/codec.py": {
-    "mtime": 1787144141.7487965,
-    "seen": 1790329526.1297548,
-    "ast_hash": "36a9d66f829b3e37ebab773c4328e8b6",
-    "semantic_hash": "36a9d66f829b3e37ebab773c4328e8b6"
+    "mtime": 1790588856.172881,
+    "seen": 1790589057.721654,
+    "ast_hash": "6ea2b10f96de098fccbcdbbcff7f45f1",
+    "semantic_hash": ""
   },
   "apps/api/app/room/commands.py": {
-    "mtime": 1787144646.473334,
-    "seen": 1790329526.129756,
-    "ast_hash": "dfb8eda643826ab1b71ddccaed094682",
-    "semantic_hash": "dfb8eda643826ab1b71ddccaed094682"
+    "mtime": 1790588856.3369741,
+    "seen": 1790589057.721654,
+    "ast_hash": "512ad598bb1079eee23532cd459c0505",
+    "semantic_hash": ""
   },
   "apps/api/app/room/contracts.py": {
-    "mtime": 1787066392.8771725,
-    "seen": 1790329526.129756,
-    "ast_hash": "14200e765b2dd6f8a7e921ae1603c03b",
-    "semantic_hash": "14200e765b2dd6f8a7e921ae1603c03b"
+    "mtime": 1790588548.1720502,
+    "seen": 1790589057.7216551,
+    "ast_hash": "6347a9b455dd977a6cec7a74504e55a5",
+    "semantic_hash": ""
   },
   "apps/api/app/room/gameplay.py": {
-    "mtime": 1787144603.560588,
-    "seen": 1790329526.129756,
-    "ast_hash": "fb4dd26c23d08a8158d1a1b5c69a37be",
-    "semantic_hash": "fb4dd26c23d08a8158d1a1b5c69a37be"
+    "mtime": 1790588856.3583245,
+    "seen": 1790589057.721656,
+    "ast_hash": "cb278e34034eb46885d2c5d1645a6587",
+    "semantic_hash": ""
   },
   "apps/api/app/room/kernel.py": {
-    "mtime": 1787144673.554859,
-    "seen": 1790329526.129757,
-    "ast_hash": "a09502b7b183f68b4cda9f5d9508bc29",
-    "semantic_hash": "a09502b7b183f68b4cda9f5d9508bc29"
+    "mtime": 1790587227.2611644,
+    "seen": 1790589057.721656,
+    "ast_hash": "fb528b762dac20eb7018b89ea8b86f65",
+    "semantic_hash": ""
   },
   "apps/api/app/room/orchestrator.py": {
     "mtime": 1787144504.5249023,
@@ -384,10 +384,10 @@
     "semantic_hash": "c5ac44e15988f8244bd7979ff5e94326"
   },
   "apps/api/tests/test_game_domain.py": {
-    "mtime": 1787145287.9708798,
-    "seen": 1790329526.129762,
-    "ast_hash": "f3c073292a0d99bddca30206ad75ec12",
-    "semantic_hash": "f3c073292a0d99bddca30206ad75ec12"
+    "mtime": 1790587437.0543475,
+    "seen": 1790589057.7219331,
+    "ast_hash": "60ae528021aba213ce8a49d88f0215ca",
+    "semantic_hash": ""
   },
   "apps/api/tests/test_game_invariant_matrix.py": {
     "mtime": 1786808828.554686,
@@ -438,16 +438,16 @@
     "semantic_hash": "e908f9ba7c240519f3b4093b5697ff1e"
   },
   "apps/api/tests/test_room_gameplay.py": {
-    "mtime": 1787145880.776906,
-    "seen": 1790329526.129766,
-    "ast_hash": "324771b7eb2b87af2b93325909894619",
-    "semantic_hash": "324771b7eb2b87af2b93325909894619"
+    "mtime": 1790587437.0539472,
+    "seen": 1790589057.7221692,
+    "ast_hash": "842039f2c9a297d916974569a54516db",
+    "semantic_hash": ""
   },
   "apps/api/tests/test_room_lobby.py": {
-    "mtime": 1787145248.8566108,
-    "seen": 1790329526.129766,
-    "ast_hash": "a61310f92f53a8f5a5708106ba94c595",
-    "semantic_hash": "a61310f92f53a8f5a5708106ba94c595"
+    "mtime": 1790587631.544926,
+    "seen": 1790589057.72217,
+    "ast_hash": "9e92e4c24a0d3a7a6f043bcc14052351",
+    "semantic_hash": ""
   },
   "apps/api/tests/worker-probe.mjs": {
     "mtime": 1787145733.2018785,
@@ -456,16 +456,16 @@
     "semantic_hash": "2d51428ff8aa81342bd340459677c9e9"
   },
   "apps/api/tests/worker.integration.test.mjs": {
-    "mtime": 1787145794.368926,
-    "seen": 1790329526.129767,
-    "ast_hash": "0000097bdbaa3d681c123a9c42e0c36b",
-    "semantic_hash": "0000097bdbaa3d681c123a9c42e0c36b"
+    "mtime": 1790588620.4734788,
+    "seen": 1790589057.7222002,
+    "ast_hash": "a65ddec4243e6a06e1a52007c07b9055",
+    "semantic_hash": ""
   },
   "apps/api/tests/worker_runtime.py": {
-    "mtime": 1787145718.3848016,
-    "seen": 1790329526.129768,
-    "ast_hash": "44aeae1baf7f2087fd638edf8da86e17",
-    "semantic_hash": "44aeae1baf7f2087fd638edf8da86e17"
+    "mtime": 1790587872.0591278,
+    "seen": 1790589057.722201,
+    "ast_hash": "388b2a5d84528651593c4886599c0e0a",
+    "semantic_hash": ""
   },
   "apps/api/vitest.config.mjs": {
     "mtime": 1786843770.374257,
@@ -546,10 +546,10 @@
     "semantic_hash": "063f67521c009116a1169c25b306a940"
   },
   "apps/web/src/features/room/lobby/LobbyView.tsx": {
-    "mtime": 1787144666.822081,
-    "seen": 1790329526.1297762,
-    "ast_hash": "beacf47ea26a9dc3e153275c9b8e6677",
-    "semantic_hash": "beacf47ea26a9dc3e153275c9b8e6677"
+    "mtime": 1790588488.5614717,
+    "seen": 1790589057.722631,
+    "ast_hash": "3e69d419ea345ab598800d9c24e8fb8c",
+    "semantic_hash": ""
   },
   "apps/web/src/features/room/lobby/RoomActions.tsx": {
     "mtime": 1787144324.0111635,
@@ -588,16 +588,16 @@
     "semantic_hash": "79db2a00fbe9d39925fbca053f9305db"
   },
   "apps/web/src/features/room/table/TableView.test.tsx": {
-    "mtime": 1787144918.0154846,
-    "seen": 1790329526.1297789,
-    "ast_hash": "fbd6a92b0eb554a787937755791b26fc",
-    "semantic_hash": "fbd6a92b0eb554a787937755791b26fc"
+    "mtime": 1790587762.2450037,
+    "seen": 1790589057.722912,
+    "ast_hash": "922ee1290f34823fb0beaad768bfb8a6",
+    "semantic_hash": ""
   },
   "apps/web/src/features/room/table/TableView.tsx": {
-    "mtime": 1787145103.4140842,
-    "seen": 1790329526.12978,
-    "ast_hash": "b3a65cd3d6fafc77c454dc6c1cf7972f",
-    "semantic_hash": "b3a65cd3d6fafc77c454dc6c1cf7972f"
+    "mtime": 1790587829.3542304,
+    "seen": 1790589057.722913,
+    "ast_hash": "556f8d102ede7556bb8866718b39e544",
+    "semantic_hash": ""
   },
   "apps/web/src/features/room/table/Tile.tsx": {
     "mtime": 1787144371.0788112,
@@ -612,10 +612,10 @@
     "semantic_hash": "75576574a8687afb285733a64e4b29c2"
   },
   "apps/web/src/features/room/table/tileActionBindings.ts": {
-    "mtime": 1787144786.1973894,
-    "seen": 1790329526.129781,
-    "ast_hash": "77686db1db3d7cbfb6b76a17e31bafc4",
-    "semantic_hash": "77686db1db3d7cbfb6b76a17e31bafc4"
+    "mtime": 1790587390.7135499,
+    "seen": 1790589057.7230122,
+    "ast_hash": "9b89d7e18eb002bbf3de536912f54c47",
+    "semantic_hash": ""
   },
   "apps/web/src/features/room/table/tileCatalog.test.ts": {
     "mtime": 1790320019.9331222,
@@ -726,10 +726,10 @@
     "semantic_hash": "f955f484c8704f897ac63abf898ee482"
   },
   "apps/web/src/lib/types.ts": {
-    "mtime": 1787144953.2185378,
-    "seen": 1790329526.1297889,
-    "ast_hash": "b73252625854ac574f065d7f54893de4",
-    "semantic_hash": "b73252625854ac574f065d7f54893de4"
+    "mtime": 1790587390.7133157,
+    "seen": 1790589057.723653,
+    "ast_hash": "398f5209dbee07f6ede4a9216c79d35a",
+    "semantic_hash": ""
   },
   "apps/web/src/main.tsx": {
     "mtime": 1786766028.3946424,
@@ -1128,16 +1128,16 @@
     "semantic_hash": "548fe7d9a89e2385fbc40d354cddfb9a"
   },
   "PRODUCT.md": {
-    "mtime": 1790326847.0429814,
-    "seen": 1790329526.129823,
-    "ast_hash": "488565790ab86a06e9bea1c605e6a3c3",
-    "semantic_hash": "488565790ab86a06e9bea1c605e6a3c3"
+    "mtime": 1790587829.3539872,
+    "seen": 1790589057.725813,
+    "ast_hash": "141021f05fc23b3ea5e280cb6cff2d41",
+    "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1787145283.047982,
-    "seen": 1790329526.129823,
-    "ast_hash": "b010a5185ee1aa81a704b58605ec16fd",
-    "semantic_hash": "b010a5185ee1aa81a704b58605ec16fd"
+    "mtime": 1790587829.3535798,
+    "seen": 1790589057.725814,
+    "ast_hash": "9eb65a1229f9018fb0a7829412439ffc",
+    "semantic_hash": ""
   },
   "THIRD_PARTY_NOTICES.md": {
     "mtime": 1787144232.1611526,
@@ -1432,5 +1432,47 @@
     "seen": 1790329526.129844,
     "ast_hash": "21d5f969fa4b0c40430c5614c16bbe29",
     "semantic_hash": "21d5f969fa4b0c40430c5614c16bbe29"
+  },
+  "apps/api/app/game/claims.py": {
+    "mtime": 1790587830.2901719,
+    "seen": 1790589057.721077,
+    "ast_hash": "161d1191e283afe53ea3e59127338c47",
+    "semantic_hash": ""
+  },
+  "apps/api/app/game/milestone4.py": {
+    "mtime": 1790588856.4218507,
+    "seen": 1790589057.721141,
+    "ast_hash": "4ec4bef673da43c11ceb8004e962139a",
+    "semantic_hash": ""
+  },
+  "apps/api/tests/test_game_milestone4.py": {
+    "mtime": 1790587830.417678,
+    "seen": 1790589057.7220218,
+    "ast_hash": "a4fd6f596cbde474f5798dec3d3e8951",
+    "semantic_hash": ""
+  },
+  "apps/api/tests/test_room_milestone4.py": {
+    "mtime": 1790588571.682256,
+    "seen": 1790589057.7221708,
+    "ast_hash": "030392eacb685c238daf55184b7a330e",
+    "semantic_hash": ""
+  },
+  "graphify-out/memory/query_20260925_094946_5da8ab6f_how_does_roomstate_connect_gameplay__privacy__pers.md": {
+    "mtime": 1790329786.8661466,
+    "seen": 1790589057.725864,
+    "ast_hash": "5a8e5c5999e46d9ce8e231085b194a55",
+    "semantic_hash": ""
+  },
+  "graphify-out/memory/query_20260925_095633_7d86e93e_trace_exactly_what_information_a_bot_can_see.md": {
+    "mtime": 1790330193.2970362,
+    "seen": 1790589057.725865,
+    "ast_hash": "9edb9a3d31ce533ed5d62e594fa399ec",
+    "semantic_hash": ""
+  },
+  "graphify-out/memory/query_20260928_080605_5c464290_verify_bot_hidden_information_exclusions_directly.md": {
+    "mtime": 1790582765.5065694,
+    "seen": 1790589057.725865,
+    "ast_hash": "5280f52175f34cf5a4885e757e0e18e1",
+    "semantic_hash": ""
   }
 }
