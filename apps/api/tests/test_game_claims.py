@@ -33,8 +33,7 @@ from app.game import (
     IllegalGameActionError,
 )
 from app.game.claims import winning_claim
-from app.game.singapore_game import _updated
-from app.game.engine import _room_with_hand
+from app.game.singapore_game import _room_with_hand, _updated
 from test_game_setup import (
     preview_room,
     IdentityRandomSource,

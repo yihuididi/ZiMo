@@ -14,8 +14,8 @@
   ".agents/skills/impeccable/scripts/data/font-index.json": {
     "mtime": 1790319588.0434892,
     "seen": 1790614899.342923,
-    "ast_hash": "4a4426c85ec12df1d9a487a39d656ff4",
-    "semantic_hash": "4a4426c85ec12df1d9a487a39d656ff4"
+    "ast_hash": "",
+    "semantic_hash": ""
   },
   ".agents/skills/impeccable/scripts/impeccable": {
     "mtime": 1790319588.0437016,
@@ -78,10 +78,10 @@
     "semantic_hash": "5182121f66c1b4279a5b3013378e6ea9"
   },
   ".codex/hooks.json": {
-    "mtime": 1790614271.2987006,
-    "seen": 1790614899.342929,
-    "ast_hash": "00aadca441a14f1f46a3b120f83277b3",
-    "semantic_hash": "00aadca441a14f1f46a3b120f83277b3"
+    "mtime": 1790616290.6220267,
+    "seen": 1790617342.302351,
+    "ast_hash": "449ab5f36645b845824e663848606e21",
+    "semantic_hash": ""
   },
   "apps/api/app/__init__.py": {
     "mtime": 1786766028.3924973,
@@ -150,10 +150,10 @@
     "semantic_hash": "4aaa76546882cdb657afd9ee25360f73"
   },
   "apps/api/app/game/engine.py": {
-    "mtime": 1790612065.3122017,
-    "seen": 1790614899.342935,
-    "ast_hash": "9c67ac5dc1f648a8fee933066a905b86",
-    "semantic_hash": "9c67ac5dc1f648a8fee933066a905b86"
+    "mtime": 1790617327.1639338,
+    "seen": 1790617342.302721,
+    "ast_hash": "404c31930a3db94d70c189703809dc3d",
+    "semantic_hash": ""
   },
   "apps/api/app/game/events.py": {
     "mtime": 1790586966.520847,
@@ -210,10 +210,10 @@
     "semantic_hash": "ee6d42eac24c76eaf6c659b6e619bebf"
   },
   "apps/api/app/game/singapore_game.py": {
-    "mtime": 1790612063.6718168,
-    "seen": 1790614899.3429399,
-    "ast_hash": "76950d9c867b61360c9cdbfa59251b1d",
-    "semantic_hash": "76950d9c867b61360c9cdbfa59251b1d"
+    "mtime": 1790617327.2302775,
+    "seen": 1790617342.3030558,
+    "ast_hash": "0c729c9484f492c578f16cb3616801c9",
+    "semantic_hash": ""
   },
   "apps/api/app/game/tiles.py": {
     "mtime": 1787146505.9323127,
@@ -396,10 +396,10 @@
     "semantic_hash": "c5ac44e15988f8244bd7979ff5e94326"
   },
   "apps/api/tests/test_game_claims.py": {
-    "mtime": 1790605523.5105937,
-    "seen": 1790614899.342954,
-    "ast_hash": "84f4234911dfecfebbbc98de4acb2c77",
-    "semantic_hash": "84f4234911dfecfebbbc98de4acb2c77"
+    "mtime": 1790617283.2783246,
+    "seen": 1790617342.303991,
+    "ast_hash": "bd66352fdb834739b4adf5091c8d5834",
+    "semantic_hash": ""
   },
   "apps/api/tests/test_game_domain.py": {
     "mtime": 1790605540.832697,
@@ -1092,56 +1092,56 @@
     "semantic_hash": "b02025a3df7ff4a6ac7e765cd1d6d54c"
   },
   ".codex/skills/graphify/SKILL.md": {
-    "mtime": 1790328622.1315665,
-    "seen": 1790614899.343019,
-    "ast_hash": "212b55d95333d84e14262f8ec83faa2b",
-    "semantic_hash": "212b55d95333d84e14262f8ec83faa2b"
+    "mtime": 1790616290.6204062,
+    "seen": 1790617342.307574,
+    "ast_hash": "0f57b61141afe7b743273aec47c49dcc",
+    "semantic_hash": ""
   },
   ".codex/skills/graphify/references/add-watch.md": {
-    "mtime": 1790328610.656026,
-    "seen": 1790614899.34302,
-    "ast_hash": "d59d027fe449f06aa03905a01184e779",
-    "semantic_hash": "d59d027fe449f06aa03905a01184e779"
+    "mtime": 1790614501.1657925,
+    "seen": 1790617342.307575,
+    "ast_hash": "c1f65eb4102ad515149303c7f296b718",
+    "semantic_hash": ""
   },
   ".codex/skills/graphify/references/exports.md": {
-    "mtime": 1790328610.6561015,
-    "seen": 1790614899.34302,
+    "mtime": 1790614501.165894,
+    "seen": 1790617342.307575,
     "ast_hash": "9da2a2152e60a22f07f05fed5158f287",
     "semantic_hash": "9da2a2152e60a22f07f05fed5158f287"
   },
   ".codex/skills/graphify/references/extraction-spec.md": {
-    "mtime": 1790328610.6561854,
-    "seen": 1790614899.3430212,
+    "mtime": 1790614501.1660197,
+    "seen": 1790617342.3075762,
     "ast_hash": "bf895ec4d4e40f5f66f7d31c2a9bd4a7",
     "semantic_hash": "bf895ec4d4e40f5f66f7d31c2a9bd4a7"
   },
   ".codex/skills/graphify/references/github-and-merge.md": {
-    "mtime": 1790328610.6562586,
-    "seen": 1790614899.3430212,
+    "mtime": 1790614501.166127,
+    "seen": 1790617342.3075771,
     "ast_hash": "cde13df085e4c492aeb7ba298a996d0d",
     "semantic_hash": "cde13df085e4c492aeb7ba298a996d0d"
   },
   ".codex/skills/graphify/references/hooks.md": {
-    "mtime": 1790328610.6563263,
-    "seen": 1790614899.343022,
+    "mtime": 1790614501.1662252,
+    "seen": 1790617342.3075771,
     "ast_hash": "3f545db6ce646650bb9de588f5512a27",
     "semantic_hash": "3f545db6ce646650bb9de588f5512a27"
   },
   ".codex/skills/graphify/references/query.md": {
-    "mtime": 1790328610.656549,
-    "seen": 1790614899.343022,
+    "mtime": 1790614501.166361,
+    "seen": 1790617342.307578,
     "ast_hash": "3c46f8ad006874260614ed8657d02307",
     "semantic_hash": "3c46f8ad006874260614ed8657d02307"
   },
   ".codex/skills/graphify/references/transcribe.md": {
-    "mtime": 1790328610.6566315,
-    "seen": 1790614899.343023,
+    "mtime": 1790614501.1664894,
+    "seen": 1790617342.307578,
     "ast_hash": "67b6a5fa6c0974e18f60db9f8932fbd8",
     "semantic_hash": "67b6a5fa6c0974e18f60db9f8932fbd8"
   },
   ".codex/skills/graphify/references/update.md": {
-    "mtime": 1790328610.6572108,
-    "seen": 1790614899.343023,
+    "mtime": 1790614501.1666172,
+    "seen": 1790617342.3075788,
     "ast_hash": "9378bd03d56baaf78bd738ab3848f142",
     "semantic_hash": "9378bd03d56baaf78bd738ab3848f142"
   },
@@ -1456,5 +1456,11 @@
     "seen": 1790614899.343063,
     "ast_hash": "21d5f969fa4b0c40430c5614c16bbe29",
     "semantic_hash": "21d5f969fa4b0c40430c5614c16bbe29"
+  },
+  "AGENTS.md": {
+    "mtime": 1790616290.6213925,
+    "seen": 1790617342.30758,
+    "ast_hash": "6a47d64fcc136324ca395065a707ef76",
+    "semantic_hash": ""
   }
 }

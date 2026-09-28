@@ -30,10 +30,11 @@ supabase/.temp/
 # Editors and operating systems
 .DS_Store
 
-# Graphify local/cache artifacts
+# Graphify artifacts
 graphify-out/.graphify_root
 graphify-out/.graphify_python
 graphify-out/cost.json
 graphify-out/cache/
 graphify-out/memory/
 graphify-out/reflections/
+graphify-out/????-??-??/
