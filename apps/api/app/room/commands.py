@@ -123,9 +123,7 @@ class RoomCommands:
         player_id = self._new_id("player")
         player_token = self._new_capability()
         try:
-            transition = join_lobby_room(
-                state, player_id, display_name, now_ms=now_ms
-            )
+            transition = join_lobby_room(state, player_id, display_name, now_ms=now_ms)
         except LobbyDomainError as exc:
             raise lobby_service_error(exc, current_revision=state.revision) from exc
         persisted = self._commit(
@@ -216,9 +214,7 @@ class RoomCommands:
         require_non_negative_int(expected_revision, "expected_revision")
         require_text(command_id, "command_id")
         require_text(action_id, "action_id")
-        fingerprint = command_fingerprint(
-            command_id, expected_revision, action_id
-        )
+        fingerprint = command_fingerprint(command_id, expected_revision, action_id)
         try:
             replay = self._repository.get_processed_command(
                 player.player_id,
@@ -234,7 +230,9 @@ class RoomCommands:
             ) from exc
         if replay is not None:
             return self._replay_result(replay, player_token)
-        if expected_revision != state.revision:
+        if expected_revision != state.revision and not self._claim_revision_valid(
+            state, player.player_id, action_id, expected_revision
+        ):
             raise RoomServiceError(
                 "revisionConflict",
                 409,
@@ -259,9 +257,7 @@ class RoomCommands:
                     state, player.player_id, action, now_ms=now_ms
                 )
             except LobbyDomainError as exc:
-                raise lobby_service_error(
-                    exc, current_revision=state.revision
-                ) from exc
+                raise lobby_service_error(exc, current_revision=state.revision) from exc
             if transition.state.status is RoomStatus.IN_MATCH:
                 started, domain_events = self._setup_started_match(
                     transition.state,
@@ -279,9 +275,7 @@ class RoomCommands:
             )
             players = self._player_records_for_state(next_state)
         else:
-            action = self._resolve_gameplay_action(
-                state, player.player_id, action_id
-            )
+            action = self._resolve_gameplay_action(state, player.player_id, action_id)
             next_state, domain_events = self._apply_gameplay_action(
                 state,
                 action,
@@ -313,9 +307,7 @@ class RoomCommands:
             )
 
         if transition is not None and transition.session_ended:
-            result: CommandResult = SessionEndedResult(
-                revision=next_state.revision
-            )
+            result: CommandResult = SessionEndedResult(revision=next_state.revision)
         else:
             result = CommandViewResult(
                 view=self._view(
@@ -332,9 +324,7 @@ class RoomCommands:
             revision=next_state.revision,
             result_json=stored_command_result(
                 result,
-                rotated_invite=(
-                    transition is not None and transition.rotate_invite
-                ),
+                rotated_invite=(transition is not None and transition.rotate_invite),
             ),
             processed_at_ms=now_ms,
         )

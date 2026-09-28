@@ -1,0 +1,54 @@
+{
+  "generated_at": "2026-09-25T09:55:44.774613+00:00",
+  "nodes": {
+    "apps_api_app_game_engine_milestonethreeengine": {
+      "code_fingerprint": "4827c92740bd73226f6bb7ec98935fc0fd94c65e0ae1eb30d5dc363ea57f18b5",
+      "label": "MilestoneThreeEngine",
+      "last": "2026-09-25T09:49:46.865806+00:00",
+      "provenance": [
+        {
+          "date": "2026-09-25T09:49:46.865806+00:00",
+          "outcome": "useful",
+          "q": "How does RoomState connect gameplay, privacy, persistence, and recovery?"
+        }
+      ],
+      "score": 0.999904293,
+      "source_file": "apps/api/app/game/engine.py",
+      "status": "tentative",
+      "uses": 1
+    },
+    "apps_api_app_game_model_roomstate": {
+      "code_fingerprint": "b438cf132a2bc743610f3c27aaf3ef1fef5ebe27a91df6980ff6fbdfc194cf2e",
+      "label": "RoomState",
+      "last": "2026-09-25T09:49:46.865806+00:00",
+      "provenance": [
+        {
+          "date": "2026-09-25T09:49:46.865806+00:00",
+          "outcome": "useful",
+          "q": "How does RoomState connect gameplay, privacy, persistence, and recovery?"
+        }
+      ],
+      "score": 0.999904293,
+      "source_file": "apps/api/app/game/model.py",
+      "status": "tentative",
+      "uses": 1
+    },
+    "apps_api_app_persistence_repository_roomrepository": {
+      "code_fingerprint": "c0e2fd717db09b0a6e31fbcd4cf08b0c1c75f63795b61752bd24af6fdce1aaa7",
+      "label": "RoomRepository",
+      "last": "2026-09-25T09:49:46.865806+00:00",
+      "provenance": [
+        {
+          "date": "2026-09-25T09:49:46.865806+00:00",
+          "outcome": "useful",
+          "q": "How does RoomState connect gameplay, privacy, persistence, and recovery?"
+        }
+      ],
+      "score": 0.999904293,
+      "source_file": "apps/api/app/persistence/repository.py",
+      "status": "tentative",
+      "uses": 1
+    }
+  },
+  "version": 1
+}

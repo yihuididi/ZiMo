@@ -230,3 +230,67 @@ describe("Milestone 3 table", () => {
     expect(document.title).toBe("Preview complete · ZiMo Mahjong");
   });
 });
+
+describe("Milestone 4 table", () => {
+  function claimView(): PublicRoomView {
+    const view = activeTableView();
+    view.rulesetVersion = "0.3.0";
+    view.stateSchemaVersion = 4;
+    view.capabilities.push("chow", "pong", "kong3", "kong4");
+    view.windowId = "window-4";
+    view.deadlineMs = view.serverTimeMs + 3000;
+    view.game!.phase = { type: "discardClaims", activeSeatId: null, windowId: view.windowId, discardSequence: 1, declaringSeatId: null };
+    view.actions = [
+      { actionId: "chow-a", label: "Chow", enabled: true, presentationSlot: "claimActions", presentationIndex: null, tone: "neutral", disabledReason: null, tiles: [{face: {family: "DOTS", value: 2}}, {face: {family: "DOTS", value: 3}}] },
+      { actionId: "chow-b", label: "Chow", enabled: true, presentationSlot: "claimActions", presentationIndex: null, tone: "neutral", disabledReason: null, tiles: [{face: {family: "DOTS", value: 5}}, {face: {family: "DOTS", value: 6}}] },
+      { actionId: "pass", label: "Pass", enabled: true, presentationSlot: "claimActions", presentationIndex: null, tone: "neutral", disabledReason: null, tiles: [] },
+    ];
+    return view;
+  }
+
+  it("renders distinct server choices and submits only the selected descriptor", () => {
+    const view = claimView();
+    const { onRunAction } = renderTable(view);
+    const choices = screen.getByRole("region", { name: "Table choices" });
+    const chows = within(choices).getAllByRole("button", { name: /Chow/ });
+    expect(chows).toHaveLength(2);
+    fireEvent.click(chows[1]);
+    expect(onRunAction).toHaveBeenCalledWith(view.actions[1]);
+    expect(within(choices).getByRole("button", { name: "Pass" })).toBeEnabled();
+    expect(screen.getByLabelText("Preview limitations")).toHaveTextContent("Game, Kong-1");
+    expect(screen.queryByRole("button", { name: "Game" })).not.toBeInTheDocument();
+  });
+
+  it("shows a recorded response while preserving the countdown", () => {
+    const view = claimView();
+    view.game!.ownClaimSubmitted = true;
+    view.actions = [];
+    renderTable(view);
+    expect(screen.getByText(/Choice recorded/)).toBeVisible();
+    expect(screen.getByRole("timer")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Pass" })).not.toBeInTheDocument();
+  });
+
+  it("renders face-up Kong-4 and claimed-discard provenance", () => {
+    const view = claimView();
+    const own = view.seats.find(s => s.view === "self")!;
+    own.melds = [{ visibility: "exposed", kind: "KONG", kongKind: "KONG_4", tiles: Array.from({length: 4}, () => ({face: {family: "DOTS" as const, value: 1 as const}})), claimedFromSeatId: null, discardSequence: null }];
+    view.game!.discards[0].claimedBySeatId = own.seatId;
+    view.game!.discards[0].claimKind = "PONG";
+    renderTable(view);
+    expect(screen.getByText("KONG-4")).toBeVisible();
+    expect(document.querySelector(".discard-claimed")).toHaveTextContent("PONG");
+  });
+
+  it("renders an explicit final-tile finish action with no countdown", () => {
+    const view = claimView();
+    view.windowId = null;
+    view.deadlineMs = null;
+    view.game!.phase = { type: "finalTileDecision", activeSeatId: "seat-2", windowId: null, discardSequence: null, declaringSeatId: null };
+    view.actions = [{ ...view.actions[2], actionId: "finish", label: "Finish Hand", presentationSlot: "turnActions" }];
+    const { onRunAction } = renderTable(view);
+    fireEvent.click(screen.getByRole("button", { name: "Finish Hand" }));
+    expect(onRunAction).toHaveBeenCalledWith(view.actions[0]);
+    expect(screen.queryByRole("timer")).not.toBeInTheDocument();
+  });
+});

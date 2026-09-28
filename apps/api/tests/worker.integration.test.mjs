@@ -151,6 +151,7 @@ function expectActionCatalog(view) {
         "disabledReason",
         "presentationSlot",
         "presentationIndex",
+        "tiles",
       ].sort(),
     );
     expect([null, "primary", "neutral", "danger"]).toContain(action.tone);
@@ -159,6 +160,8 @@ function expectActionCatalog(view) {
       "invitation",
       "concealedTile",
       "drawnTile",
+      "claimActions",
+      "turnActions",
     ]).toContain(action.presentationSlot);
     if (action.presentationSlot === "concealedTile") {
       expect(Number.isSafeInteger(action.presentationIndex)).toBe(true);
@@ -267,8 +270,8 @@ async function createRoom(displayName = "Host") {
     revision: 0,
     presenceVersion: 1,
     rulesetId: "singapore",
-    rulesetVersion: "0.2.0",
-    stateSchemaVersion: 3,
+    rulesetVersion: "0.3.0",
+    stateSchemaVersion: 4,
     capabilities: [
       "multiplayerLobby",
       "roomEvents",
@@ -276,6 +279,7 @@ async function createRoom(displayName = "Host") {
       "drawDiscard",
       "bonusTiles",
       "discardWindow",
+      "chow", "pong", "kong3", "kong4",
     ],
   });
   expectDisconnected(created.view, created.playerId);
@@ -1209,7 +1213,9 @@ describe("Milestone 3 room HTTP API", () => {
     } else {
       expect(started.result.view.deadlineMs).toEqual(expect.any(Number));
       expect(started.result.view.windowId).toEqual(expect.any(String));
-      expect(started.result.view.actions).toEqual([]);
+      expect(started.result.view.actions.every(
+        ({ presentationSlot }) => presentationSlot === "claimActions",
+      )).toBe(true);
     }
 
     const eventsResponse = await roomFetch(`/rooms/${host.roomId}/events`, {

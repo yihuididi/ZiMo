@@ -25,6 +25,7 @@ class PublicTileView(GameModel):
 
 
 class PublicExposedMeldView(GameModel):
+    kong_kind: Literal["KONG_3", "KONG_4"] | None = None
     visibility: Literal["exposed"] = "exposed"
     kind: MeldKind
     tiles: tuple[PublicTileView, ...]
@@ -62,6 +63,7 @@ def project_public_meld(meld: MeldState) -> PublicMeldView:
     if meld.concealed:
         return PublicConcealedMeldView(kind=meld.kind, tile_count=len(meld.tiles))
     return PublicExposedMeldView(
+        kong_kind=meld.kong_kind,
         kind=meld.kind,
         tiles=tuple(project_public_tile(tile) for tile in meld.tiles),
         claimed_from_seat_id=meld.claimed_from_seat_id,

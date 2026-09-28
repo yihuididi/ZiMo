@@ -1,11 +1,11 @@
 # ZiMo Mahjong
 
-Milestone 3 of a server-authoritative, real-time multiplayer Mahjong application.
+Milestone 4 of a server-authoritative, real-time multiplayer Mahjong application.
 It provides private four-seat rooms, bearer-authenticated sessions, mixed human
 and bot tables, revisioned opaque commands, durable three-second discard windows,
-and hibernating WebSocket updates. New rooms play a one-hand draw/discard preview;
-claims, melds, wins, scoring, payments, settings, and additional hands remain
-explicitly unavailable.
+and hibernating WebSocket updates. New rooms play a one-hand claims/melds preview
+with Chow, Pong, Kong-3, Kong-4, and Pass. Game, Kong-1, scoring, payments,
+settings, and additional hands remain explicitly unavailable.
 
 ## Architecture
 
@@ -97,12 +97,43 @@ from the same saved browser session cancels the removal. If the deadline expires
 the server revokes that player and opens their seat. Started and finished rooms
 retain roles, readiness, and disconnected seats without a removal deadline.
 
-New rooms use Singapore preview ruleset `0.2.0`. Mandatory draws and bonus
-replacements are automatic; a human submits only the current opaque discard
-action ID. Every discard opens a persisted three-second resolution window, while
-an ordinary disconnected human turn waits indefinitely and is restored through
-an authenticated fetch or reconnect. Rooms created under legacy ruleset `0.1.0`
-remain lobby-only.
+New rooms use Singapore preview ruleset `0.3.0` and snapshot schema `4`.
+Existing `0.2.0` rooms retain the original draw/discard preview and schema `3`;
+`0.1.0` rooms remain lobby-only. No SQL tables or stored legacy snapshots need
+rewriting for milestone 4.
+
+Mandatory draws and bonus replacements are automatic. Every discard waits the
+full 3000 ms, including when nobody can claim or everybody passes. Each eligible
+player can submit one final Chow, Pong, Kong-3, or Pass. Bots choose their hidden
+intents in the opening transaction. At the deadline, Kong/Pong outrank Chow;
+equal priority goes to the nearest counterclockwise seat. Chow is restricted to
+the next counterclockwise seat. Missed responses count as Pass.
+
+Passed Pong faces stay blocked until that player draws or completes a meld;
+Chow/Pong cannot use the player's most recent own discard. Kongs take opposite-end
+replacements, exposing any bonus chain while retaining the 15-tile reserve.
+Kong-4 faces are public. At the final playable tile, eligible Kong-4 and
+**Finish Hand** choices have no timeout; neither takes a replacement or discard.
+Otherwise wall exhaustion ends the preview automatically as a tie.
+
+Commands retain `{commandId, expectedRevision, actionId}`. Claim IDs are scoped
+to the authenticated seat and current window, and stay valid across other
+players' responses. Claim commands accept revisions between the window's opening
+revision and current revision; ordinary commands still require an exact revision.
+Inputs at or after the deadline cannot add a claim. `(playerId, commandId)`
+retries remain idempotent. Reusable credentials never appear in URLs.
+
+New action presentation slots are `claimActions` and `turnActions`, with optional
+public tile-face previews. `game.ownClaimSubmitted` acknowledges only the viewer's
+response. Exposed melds carry `kongKind`, source seat, and discard sequence;
+discards retain their original historical entries with claim annotations.
+`claimResolved` and `meldDeclared` audit events contain only public resolution
+facts. Pending choices and physical tile IDs never enter public events or views.
+
+Ordinary disconnected human turns and final-tile choices wait indefinitely.
+Authenticated reconnect reconstructs the same state, pending response, and
+original window deadline from SQLite. The table continues to display
+**Preview ruleset**, with Game and Kong-1 visibly unavailable.
 
 ## Tests
 
@@ -189,7 +220,7 @@ Never commit credentials or expose a Supabase service-role key to the frontend.
 
 Per the current project override, the existing Supabase initialization,
 configuration, dependencies, secrets declarations, and CLI project are retained.
-Supabase remains non-authoritative and unused by the Milestone 3 domain and
+Supabase remains non-authoritative and unused by the Milestone 4 domain and
 persistence foundation. `supabase/config.toml` establishes only the local CLI
 project boundary; no Supabase tables, migrations, users, authentication flows, or
 database queries are introduced by this milestone.

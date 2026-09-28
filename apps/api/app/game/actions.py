@@ -95,13 +95,18 @@ class DeclareWin(GameModel):
     window_id: WindowId | None = None
 
 
+class FinishHand(GameModel):
+    type: Literal["finishHand"] = "finishHand"
+    seat_id: SeatId = Field(min_length=1)
+
+
 class Continue(GameModel):
     type: Literal["continue"] = "continue"
     seat_id: SeatId = Field(min_length=1)
 
 
 DomainAction = Annotated[
-    Draw | Discard | Chow | Pong | Kong | Pass | DeclareWin | Continue,
+    Draw | Discard | Chow | Pong | Kong | Pass | DeclareWin | Continue | FinishHand,
     Field(discriminator="type"),
 ]
 

@@ -105,6 +105,23 @@ function BonusTiles({ seat }: { seat: PublicSeatView }) {
   );
 }
 
+function Melds({ seat, view }: { seat: PublicSeatView; view: PublicRoomView }) {
+  if (seat.melds.length === 0) return null;
+  return <div className="table-melds" aria-label={`${occupantName(seat)} melds`}>
+    {seat.melds.map((meld, index) => <div className="table-meld" key={index}>
+      <span>{meld.visibility === "exposed" && meld.kongKind ? meld.kongKind.replace("_", "-") : meld.kind}</span>
+      <div className="table-meld-tiles">
+        {meld.visibility === "exposed"
+          ? meld.tiles.map((tile, i) => <TileFace key={i} tile={tile} size="mini" />)
+          : Array.from({ length: meld.tileCount }, (_, i) => <TileBack key={i} />)}
+      </div>
+      {meld.visibility === "exposed" && meld.discardSequence !== null && <small>
+        From {occupantName(view.seats.find(s => s.seatId === meld.claimedFromSeatId) ?? null)} · #{meld.discardSequence}
+      </small>}
+    </div>)}
+  </div>;
+}
+
 function OpponentHand({ seat }: { seat: OpponentSeatView }) {
   const description = `${seat.concealedTileCount} concealed tiles${
     seat.hasDrawnTile ? " and a separate drawn tile" : ""
@@ -140,6 +157,7 @@ function TableSeat({
       <SeatHeader seat={seat} view={view} />
       {seat.view === "opponent" && <OpponentHand seat={seat} />}
       <BonusTiles seat={seat} />
+      <Melds seat={seat} view={view} />
     </section>
   );
 }
@@ -163,6 +181,9 @@ function DiscardRiver({ view }: { view: PublicRoomView }) {
               <li key={discard.sequence}>
                 <span className="discard-sequence">#{discard.sequence}</span>
                 <TileFace tile={discard.tile} size="mini" />
+                {discard.claimedBySeatId && <small className="discard-claimed">
+                  {discard.claimKind} · {occupantName(seatsById.get(discard.claimedBySeatId) ?? null)}
+                </small>}
                 <span className="sr-only">
                   discarded by {occupantName(discarder ?? null)}
                 </span>
@@ -190,7 +211,7 @@ function PhaseStatus({ view }: { view: PublicRoomView }) {
     return (
       <div className="phase-status phase-finished" role="status">
         <strong>Preview complete</strong>
-        <span>The wall is exhausted. This draw/discard table ends in a tie.</span>
+        <span>The wall is exhausted. This preview ends in a tie.</span>
       </div>
     );
   }
@@ -220,8 +241,10 @@ function PhaseStatus({ view }: { view: PublicRoomView }) {
         </strong>
         <span>
           {phase?.type === "awaitingDiscard"
-            ? "Choose a server-authorized discard."
-            : "Drawing from the live wall."}
+            ? "Choose a tile to discard."
+            : phase?.type === "finalTileDecision"
+              ? "Last playable tile. Choose a Kong or finish the hand; no replacement is taken."
+              : "Drawing from the live wall."}
         </span>
       </div>
     );
@@ -271,6 +294,9 @@ export function TableView({
     (operation) => isGameplayPresentationSlot(operation.slot),
   );
   const groupLocked = gameplayOperations.length > 0;
+  const claimCountdown = useDeadlineCountdown({ deadlineMs: view.deadlineMs, serverTimeMs: view.serverTimeMs, windowId: view.windowId });
+  const choiceActions = view.actions.filter(action => action.presentationSlot === "claimActions" || action.presentationSlot === "turnActions");
+  const claimsEnabled = view.capabilities.includes("chow");
   const hasDiscardActions = view.actions.some((action) =>
     isGameplayPresentationSlot(action.presentationSlot),
   );
@@ -305,7 +331,7 @@ export function TableView({
 
       <div className="table-title-row">
         <div>
-          <p className="eyebrow">Draw/discard preview · Revision {view.revision}</p>
+          <p>Preview ruleset · Revision {view.revision}</p>
           <PageHeading focusOnMount>Mahjong table</PageHeading>
         </div>
         <div className="wall-summary" aria-label="Wall tile counts">
@@ -316,14 +342,31 @@ export function TableView({
       </div>
 
       <aside className="preview-notice" aria-label="Preview limitations">
-        <strong>Milestone 3 preview</strong>
+        <strong>{claimsEnabled ? "Milestone 4 preview" : "Milestone 3 preview"}</strong>
         <span>
-          Claims and melds, wins, scoring and payments, settings, and additional
-          hands are intentionally unavailable.
+          {claimsEnabled
+            ? "Game, Kong-1, scoring and payments, settings, and additional hands are unavailable."
+            : "Claims and melds, wins, scoring and payments, settings, and additional hands are intentionally unavailable."}
         </span>
       </aside>
 
       <PhaseStatus view={view} />
+      {claimsEnabled && (choiceActions.length > 0 || view.game?.ownClaimSubmitted) && (
+        <section className="table-choices" aria-label="Table choices">
+          {view.game?.ownClaimSubmitted
+            ? <p role="status">Choice recorded. Waiting for the window to close.</p>
+            : <div className="table-choice-buttons">
+              {choiceActions.map(action => <button
+                type="button" key={action.actionId}
+                disabled={!action.enabled || groupLocked || (action.presentationSlot === "claimActions" && claimCountdown.resolving)}
+                onClick={() => onRunAction(action)}
+              >
+                <strong>{action.label}</strong>
+                <span className="table-choice-tiles">{action.tiles?.map((tile, index) => <TileFace key={index} tile={tile} size="mini" />)}</span>
+              </button>)}
+            </div>}
+        </section>
+      )}
 
       <div className="table-stage">
         <TableSeat seat={positioned.top} position="top" view={view} />
@@ -334,6 +377,7 @@ export function TableView({
         <section className="table-seat table-seat-bottom" aria-label="Your seat, bottom seat">
           {selfSeat && <SeatHeader seat={selfSeat} view={view} />}
           {selfSeat && <BonusTiles seat={selfSeat} />}
+          {selfSeat && <Melds seat={selfSeat} view={view} />}
           {selfSeat && (
             <div className="own-hand-area">
               <div className="own-hand-copy">

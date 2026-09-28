@@ -7,16 +7,25 @@ from .actions import (
     Discard,
     DomainAction,
     Draw,
+    FinishHand,
     Kong,
     KongKind,
     Pass,
     Pong,
     parse_domain_action_json,
 )
+from .milestone4 import (
+    MilestoneFourEngine,
+    VersionedPreviewEngine,
+    validate_milestone_four_room,
+)
 from .base import GameModel, canonical_json
 from .capabilities import (
     MILESTONE_2_CAPABILITIES,
     MILESTONE_2_RULESET_VERSION,
+    MILESTONE_4_CAPABILITIES,
+    MILESTONE_4_RULESET_VERSION,
+    MILESTONE_4_STATE_SCHEMA_VERSION,
     MILESTONE_3_CAPABILITIES,
     MILESTONE_3_RULESET_VERSION,
     MILESTONE_3_STATE_SCHEMA_VERSION,
@@ -78,6 +87,7 @@ from .model import (
     ClaimKind,
     CommandId,
     CompletePhase,
+    FinalTileDecisionPhase,
     ConnectionId,
     DiscardClaimsPhase,
     DiscardState,
@@ -185,6 +195,14 @@ from .tiles import (
 )
 
 __all__ = [
+    "MilestoneFourEngine",
+    "VersionedPreviewEngine",
+    "validate_milestone_four_room",
+    "MILESTONE_4_CAPABILITIES",
+    "MILESTONE_4_RULESET_VERSION",
+    "MILESTONE_4_STATE_SCHEMA_VERSION",
+    "FinalTileDecisionPhase",
+    "FinishHand",
     "ANIMAL_VALUES",
     "AutomatedDecisionRequested",
     "AutomatedPolicy",

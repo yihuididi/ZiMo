@@ -7,9 +7,9 @@ from typing import Any, Literal, TypeAlias
 from pydantic import Field
 
 if __package__.startswith("app."):
-    from ..game import GameModel, PublicRoomView
+    from ..game import GameModel, PublicRoomView, PublicTileView
 else:  # pragma: no cover - Python Workers load modules from the app directory.
-    from game import GameModel, PublicRoomView
+    from game import GameModel, PublicRoomView, PublicTileView
 
 
 SOCKET_TICKET_TTL_MS = 30_000
@@ -83,7 +83,7 @@ class ProjectedRoomEvent(GameModel):
     public_sequence: int = Field(gt=0)
     revision: int = Field(ge=0)
     type: str
-    payload: dict[str, str | int | bool | None]
+    payload: dict[str, str | int | bool | None | list[PublicTileView]]
     created_at_ms: int = Field(ge=0)
 
 

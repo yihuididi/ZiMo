@@ -128,13 +128,35 @@ class GameRoom(DurableObject):
         """Run, then schedule and push every commit before returning."""
 
         generation = self._orchestrator.commit_generation
+        before = self._orchestrator.load_room()
         result = self._room_rpc(operation)
         if self._orchestrator.commit_generation != generation:
+            after = self._orchestrator.cached_state
+            recipients = None
+            old_hand = before.match.current_hand if before and before.match else None
+            new_hand = after.match.current_hand if after and after.match else None
+            if (
+                old_hand
+                and new_hand
+                and getattr(old_hand.phase, "window_id", None) is not None
+                and old_hand.phase == new_hand.phase
+                and old_hand.pending_claims != new_hand.pending_claims
+            ):
+                responded = {c.seat_id for c in new_hand.pending_claims} - {
+                    c.seat_id for c in old_hand.pending_claims
+                }
+                recipients = {
+                    str(s.controller.player_id)
+                    for s in after.seats
+                    if s.seat_id in responded
+                    and getattr(s.controller, "type", None) == "external"
+                }
             await self._reschedule_room_alarm()
             if broadcast_after_change:
                 try:
                     self._broadcast_views(
-                        now_ms=self._orchestrator.last_sampled_time_ms
+                        now_ms=self._orchestrator.last_sampled_time_ms,
+                        player_ids=recipients,
                     )
                 except Exception as exc:
                     log_unexpected(
@@ -217,8 +239,7 @@ class GameRoom(DurableObject):
     async def fetch(self, request: Any) -> WorkerResponse:
         if (
             method_text(request) != "GET"
-            or (request_header(request, "upgrade") or "").casefold()
-            != "websocket"
+            or (request_header(request, "upgrade") or "").casefold() != "websocket"
         ):
             return worker_problem(
                 422,
@@ -376,9 +397,7 @@ class GameRoom(DurableObject):
             if attachment is None:
                 _close_socket(socket, 1011, "Invalid connection state")
                 continue
-            identities.add(
-                (attachment["playerId"], attachment["authGeneration"])
-            )
+            identities.add((attachment["playerId"], attachment["authGeneration"]))
         return identities
 
     def _reconcile_open_socket_presence(
@@ -427,10 +446,7 @@ class GameRoom(DurableObject):
                 return
             raise
         await self._reschedule_room_alarm()
-        if (
-            presence_changed
-            or self._orchestrator.commit_generation != generation
-        ):
+        if presence_changed or self._orchestrator.commit_generation != generation:
             self._broadcast_views(now_ms=now_ms)
 
     async def alarm(self) -> None:
@@ -466,7 +482,9 @@ class GameRoom(DurableObject):
             ) == identity:
                 _close_socket(socket, 4001, "Room session ended")
 
-    def _broadcast_views(self, *, now_ms: int | None = None) -> None:
+    def _broadcast_views(
+        self, *, now_ms: int | None = None, player_ids: set[str] | None = None
+    ) -> None:
         timestamp = now_ms
         if timestamp is None:
             timestamp = self._orchestrator.last_sampled_time_ms
@@ -476,6 +494,8 @@ class GameRoom(DurableObject):
             attachment = _socket_attachment(socket)
             if attachment is None:
                 _close_socket(socket, 1011, "Invalid connection state")
+                continue
+            if player_ids is not None and attachment["playerId"] not in player_ids:
                 continue
             try:
                 view = self._orchestrator.current_view_for_player_id(
@@ -495,9 +515,7 @@ class GameRoom(DurableObject):
                 )
                 _close_socket(socket, 1011, "Connection update failed")
 
-    async def webSocketMessage(  # noqa: N802
-        self, socket: Any, _message: Any
-    ) -> None:
+    async def webSocketMessage(self, socket: Any, _message: Any) -> None:  # noqa: N802
         _close_socket(socket, 1008, "Server-push connection")
 
     async def webSocketClose(  # noqa: N802
@@ -511,9 +529,7 @@ class GameRoom(DurableObject):
         _close_socket(socket, code, reason)
         await self._socket_departed(identity)
 
-    async def webSocketError(  # noqa: N802
-        self, socket: Any, _error: Any
-    ) -> None:
+    async def webSocketError(self, socket: Any, _error: Any) -> None:  # noqa: N802
         identity = _socket_identity(socket)
         _close_socket(socket, 1011, "Connection lost")
         await self._socket_departed(identity)

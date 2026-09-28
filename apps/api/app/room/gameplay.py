@@ -14,6 +14,15 @@ if __package__.startswith("app."):
         BonusExposed,
         ClaimWindowRequested,
         Discard,
+        Chow,
+        Pong,
+        Kong,
+        Pass,
+        FinishHand,
+        DiscardClaimsPhase,
+        DiscardWindowResolved,
+        MeldDeclared,
+        PublicTileView,
         DomainAction,
         DomainEvent,
         HandCompleted,
@@ -42,6 +51,15 @@ else:  # pragma: no cover - Python Workers load modules from the app directory.
         BonusExposed,
         ClaimWindowRequested,
         Discard,
+        Chow,
+        Pong,
+        Kong,
+        Pass,
+        FinishHand,
+        DiscardClaimsPhase,
+        DiscardWindowResolved,
+        MeldDeclared,
+        PublicTileView,
         DomainAction,
         DomainEvent,
         HandCompleted,
@@ -94,12 +112,10 @@ class RoomGameplay:
         deadline = state.pending_deadline
         if deadline is None or now_ms < deadline.deadline_ms:
             return False
-        if str(state.ruleset_version) != MILESTONE_3_RULESET_VERSION:
+        if str(state.ruleset_version) not in {MILESTONE_3_RULESET_VERSION, "0.3.0"}:
             raise RuntimeError("a non-preview room retained a gameplay deadline")
 
-        result = self._game_engine.resolve_discard_window(
-            state, deadline.window_id
-        )
+        result = self._game_engine.resolve_discard_window(state, deadline.window_id)
         result = TransitionResult(
             state=self._validated_state_update(
                 result.state,
@@ -146,17 +162,13 @@ class RoomGameplay:
     def _catalog_gameplay_actions(
         self, state: RoomState, player_id: str
     ) -> tuple[_CataloguedGameplayAction, ...]:
-        if str(state.ruleset_version) != MILESTONE_3_RULESET_VERSION:
+        if str(state.ruleset_version) not in {MILESTONE_3_RULESET_VERSION, "0.3.0"}:
             return ()
         seat_id = self._external_seat_id(state, player_id)
         if seat_id is None:
             return ()
         actions = self._game_engine.legal_actions(state, seat_id)
-        return tuple(
-            self._catalog_discard(state, seat_id, action)
-            for action in actions
-            if isinstance(action, Discard)
-        )
+        return tuple(self._catalog_action(state, seat_id, action) for action in actions)
 
     def _resolve_gameplay_action(
         self,
@@ -199,11 +211,21 @@ class RoomGameplay:
         *,
         now_ms: int,
     ) -> tuple[RoomState, tuple[DomainEvent, ...]]:
-        if str(state.ruleset_version) != MILESTONE_3_RULESET_VERSION:
+        if str(state.ruleset_version) not in {MILESTONE_3_RULESET_VERSION, "0.3.0"}:
             return state, ()
         result = self._game_engine.setup_match(state)
         next_state, events = self._pump_gameplay(result, now_ms=now_ms)
         # Lobby start already assigned the one revision for this command.
+        hand = next_state.match.current_hand
+        if next_state.ruleset_version == "0.3.0" and isinstance(
+            hand.phase, DiscardClaimsPhase
+        ):
+            phase = hand.phase.model_copy(update={"opening_revision": state.revision})
+            hand = hand.model_copy(update={"phase": phase})
+            next_state = self._validated_state_update(
+                next_state,
+                match=next_state.match.model_copy(update={"current_hand": hand}),
+            )
         return (
             self._validated_state_update(
                 next_state,
@@ -246,7 +268,9 @@ class RoomGameplay:
                 if effect.duration_ms != DISCARD_WINDOW_MS:
                     raise RuntimeError("preview discard windows must last 3000 ms")
                 if state.pending_deadline is not None:
-                    raise RuntimeError("gameplay transition attempted to extend a deadline")
+                    raise RuntimeError(
+                        "gameplay transition attempted to extend a deadline"
+                    )
                 state = self._validated_state_update(
                     state,
                     pending_deadline=PendingDeadline(
@@ -254,6 +278,14 @@ class RoomGameplay:
                         deadline_ms=now_ms + effect.duration_ms,
                     ),
                 )
+                # Choose every bot intent before the opening snapshot is committed.
+                for seat_id in effect.eligible_seat_ids:
+                    seat = next(s for s in state.seats if s.seat_id == seat_id)
+                    if isinstance(seat.controller, AutomatedSeatController):
+                        chosen = self._choose_automated_action(state, seat_id)
+                        response = self._game_engine.transition(state, chosen)
+                        state = response.state
+                        events.extend(response.domain_events)
                 effects = ()
                 continue
 
@@ -297,8 +329,73 @@ class RoomGameplay:
         policy = self._policy_selector.select(seat.controller.policy_id)
         chosen = policy.choose_action(observation, legal_actions, self._random_source)
         if not any(chosen == legal for legal in legal_actions):
-            raise RuntimeError("automated policy returned an action outside its catalog")
+            raise RuntimeError(
+                "automated policy returned an action outside its catalog"
+            )
         return chosen
+
+    def _claim_revision_valid(
+        self, state: RoomState, player_id: str, action_id: str, expected_revision: int
+    ) -> bool:
+        hand = state.match.current_hand if state.match else None
+        if (
+            state.ruleset_version != "0.3.0"
+            or hand is None
+            or not isinstance(hand.phase, DiscardClaimsPhase)
+        ):
+            return False
+        opening = hand.phase.opening_revision
+        return (
+            opening is not None
+            and opening <= expected_revision <= state.revision
+            and any(
+                item.descriptor.action_id == action_id
+                for item in self._catalog_gameplay_actions(state, player_id)
+            )
+        )
+
+    def _catalog_action(
+        self, state: RoomState, seat_id: SeatId, action: DomainAction
+    ) -> _CataloguedGameplayAction:
+        if isinstance(action, Discard):
+            return self._catalog_discard(state, seat_id, action)
+        hand = state.match.current_hand
+        player = next(p for p in hand.player_hands if p.seat_id == seat_id)
+        held = (
+            *player.concealed_tiles,
+            *((player.drawn_tile,) if player.drawn_tile else ()),
+        )
+        tiles = tuple(
+            PublicTileView(face=t.face)
+            for t in held
+            if t.tile_id in getattr(action, "tile_ids", ())
+        )
+        label = (
+            "Kong-3"
+            if isinstance(action, Kong) and action.kind.value == "KONG_3"
+            else (
+                "Kong-4"
+                if isinstance(action, Kong)
+                else (
+                    "Finish Hand"
+                    if isinstance(action, FinishHand)
+                    else action.type.title()
+                )
+            )
+        )
+        return _CataloguedGameplayAction(
+            descriptor=OpaqueActionDescriptor(
+                action_id=self._gameplay_action_id(state, seat_id, action),
+                label=label,
+                tiles=tiles,
+                presentation_slot=(
+                    "claimActions"
+                    if isinstance(hand.phase, DiscardClaimsPhase)
+                    else "turnActions"
+                ),
+            ),
+            action=action,
+        )
 
     def _catalog_discard(
         self,
@@ -353,7 +450,12 @@ class RoomGameplay:
         material = canonical_json(
             {
                 "action": action.canonical_data(),
-                "revision": state.revision,
+                "revision": (
+                    state.match.current_hand.phase.opening_revision
+                    if state.ruleset_version == "0.3.0"
+                    and isinstance(state.match.current_hand.phase, DiscardClaimsPhase)
+                    else state.revision
+                ),
                 "roomId": str(state.room_id),
                 "seatId": str(seat_id),
                 "version": 1,
@@ -437,6 +539,23 @@ def _project_gameplay_event(
             "seatId": str(event.seat_id),
             "tileFamily": event.tile.face.family.value,
             "tileValue": event.tile.face.value,
+        }
+    if isinstance(event, DiscardWindowResolved) and event.winning_seat_id is not None:
+        return "claimResolved", {
+            "discardSequence": event.discard_sequence,
+            "seatId": str(event.winning_seat_id),
+            "claimKind": event.claim_kind.value,
+        }
+    if isinstance(event, MeldDeclared):
+        return "meldDeclared", {
+            "seatId": str(event.seat_id),
+            "kind": event.meld.kind.value,
+            "kongKind": event.meld.kong_kind,
+            "tiles": [
+                PublicTileView(face=t.face).canonical_data() for t in event.meld.tiles
+            ],
+            "claimedFromSeatId": event.meld.claimed_from_seat_id,
+            "discardSequence": event.meld.discard_sequence,
         }
     if isinstance(event, HandCompleted):
         if event.result.outcome is not HandOutcome.TIE:

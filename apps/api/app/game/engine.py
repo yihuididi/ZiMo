@@ -149,9 +149,7 @@ class MilestoneOneEngine:
         del state
         raise RuntimeError("gameplay setup is not enabled by ruleset 0.1.0")
 
-    def transition(
-        self, state: RoomState, action: DomainAction
-    ) -> TransitionResult:
+    def transition(self, state: RoomState, action: DomainAction) -> TransitionResult:
         del state
         raise GameplayUnavailableError(action)
 
@@ -173,11 +171,17 @@ class MilestoneThreeEngine:
 
     capabilities = MILESTONE_3_CAPABILITIES
 
+    def _require(self, state: RoomState) -> None:
+        _require_milestone_three(state)
+
+    def _validate(self, state: RoomState) -> None:
+        validate_milestone_three_room(state)
+
     def __init__(self, rng: RandomSource | None = None) -> None:
         self._rng = SystemRandomSource() if rng is None else rng
 
     def setup_match(self, state: RoomState) -> TransitionResult:
-        _require_milestone_three(state)
+        self._require(state)
         if (
             state.status is not RoomStatus.IN_MATCH
             or state.match is None
@@ -199,7 +203,9 @@ class MilestoneThreeEngine:
         canonical_deck = canonical_physical_deck(hand_id)
         shuffled = self._rng.shuffled(canonical_deck)
         if len(shuffled) != 148 or set(shuffled) != set(canonical_deck):
-            raise InvalidGameStateError("random source did not return a deck permutation")
+            raise InvalidGameStateError(
+                "random source did not return a deck permutation"
+            )
         salt_value = self._rng.randbelow(1 << 256)
         if type(salt_value) is not int or not 0 <= salt_value < (1 << 256):
             raise InvalidGameStateError("random source returned invalid tile entropy")
@@ -287,7 +293,7 @@ class MilestoneThreeEngine:
             domain_events=(*setup_events, *drawn.domain_events),
             effects=drawn.effects,
         )
-        validate_milestone_three_room(result.state)
+        self._validate(result.state)
         return result
 
     def legal_actions(
@@ -315,9 +321,7 @@ class MilestoneThreeEngine:
             )
         return tuple(actions)
 
-    def transition(
-        self, state: RoomState, action: DomainAction
-    ) -> TransitionResult:
+    def transition(self, state: RoomState, action: DomainAction) -> TransitionResult:
         _require_milestone_three(state)
         if not isinstance(action, Discard) or action not in self.legal_actions(
             state, action.seat_id
@@ -449,13 +453,14 @@ class MilestoneThreeEngine:
         validate_milestone_three_room(result.state)
         return result
 
-    def _automatic_draw(
-        self, state: RoomState, seat_id: SeatId
-    ) -> TransitionResult:
+    def _automatic_draw(self, state: RoomState, seat_id: SeatId) -> TransitionResult:
         if state.match is None or state.match.current_hand is None:
             raise InvalidGameStateError("active match has no hand")
         hand = state.match.current_hand
-        if not isinstance(hand.phase, AwaitingDrawPhase) or hand.phase.seat_id != seat_id:
+        if (
+            not isinstance(hand.phase, AwaitingDrawPhase)
+            or hand.phase.seat_id != seat_id
+        ):
             raise InvalidGameStateError("automatic draw does not match the phase")
         live = list(hand.wall.live_tiles)
         reserve = list(hand.wall.reserve_tiles)
@@ -561,15 +566,11 @@ def _replacement_chain(
             raise InvalidGameStateError("replacement reserve must contain 15 tiles")
         replacement = reserve.pop()
         reserve.insert(0, live.pop())
-        events.append(
-            TileDrawn(seat_id=seat_id, tile=replacement, replacement=True)
-        )
+        events.append(TileDrawn(seat_id=seat_id, tile=replacement, replacement=True))
         if not is_bonus_tile(replacement):
             return replacement
         bonus.append(replacement)
-        events.append(
-            BonusExposed(seat_id=seat_id, tile=replacement, initial=False)
-        )
+        events.append(BonusExposed(seat_id=seat_id, tile=replacement, initial=False))
     return None
 
 
@@ -591,12 +592,16 @@ def _complete_tie(state: RoomState, hand: HandState) -> RoomState:
     return _room_with_hand(state, complete, pending_deadline=None)
 
 
-def finalize_completed_preview(
-    state: RoomState, *, completed_at_ms: int
-) -> RoomState:
+def finalize_completed_preview(state: RoomState, *, completed_at_ms: int) -> RoomState:
     """Finalize a clock-free completed hand using room-sampled time."""
 
-    _require_milestone_three(state)
+    from .milestone4 import validate_milestone_four_room
+
+    validator = (
+        validate_milestone_four_room
+        if state.ruleset_version == "0.3.0"
+        else validate_milestone_three_room
+    )
     if (
         not isinstance(completed_at_ms, int)
         or isinstance(completed_at_ms, bool)
@@ -604,9 +609,9 @@ def finalize_completed_preview(
     ):
         raise ValueError("completed_at_ms must be a non-negative integer")
     if state.status is RoomStatus.FINISHED:
-        validate_milestone_three_room(state, require_deadline=True)
+        validator(state, require_deadline=True)
         return state
-    validate_milestone_three_room(state)
+    validator(state)
     if (
         state.match is None
         or state.match.status is not MatchStatus.ACTIVE
@@ -621,9 +626,7 @@ def finalize_completed_preview(
     if not history or history[-1] != hand.result:
         history = (*history, hand.result)
     winner_ids = (
-        ()
-        if hand.result.winner_seat_id is None
-        else (hand.result.winner_seat_id,)
+        () if hand.result.winner_seat_id is None else (hand.result.winner_seat_id,)
     )
     match = MatchState(
         match_id=state.match.match_id,
@@ -646,7 +649,7 @@ def finalize_completed_preview(
         match=match,
         pending_deadline=None,
     )
-    validate_milestone_three_room(finalized, require_deadline=True)
+    validator(finalized, require_deadline=True)
     return finalized
 
 
@@ -680,9 +683,10 @@ def validate_milestone_three_room(
         raise InvalidGameStateError("preview discards cannot be claimed")
     if any(is_bonus_tile(discard.tile) for discard in hand.discards):
         raise InvalidGameStateError("preview bonus tiles cannot be discarded")
-    if hand.tile_id_salt is None or re.fullmatch(
-        r"[0-9a-f]{64}", hand.tile_id_salt
-    ) is None:
+    if (
+        hand.tile_id_salt is None
+        or re.fullmatch(r"[0-9a-f]{64}", hand.tile_id_salt) is None
+    ):
         raise InvalidGameStateError("preview hand requires opaque tile identity salt")
     ordered_seat_ids = tuple(
         seat.seat_id for seat in sorted(state.seats, key=lambda seat: seat.slot)
@@ -716,9 +720,7 @@ def validate_milestone_three_room(
             raise InvalidGameStateError("each seat requires 13 raw initial tile IDs")
         if any(is_bonus_tile(tile) for tile in player_hand.concealed_tiles):
             raise InvalidGameStateError("concealed tiles cannot contain bonuses")
-        if player_hand.drawn_tile is not None and is_bonus_tile(
-            player_hand.drawn_tile
-        ):
+        if player_hand.drawn_tile is not None and is_bonus_tile(player_hand.drawn_tile):
             raise InvalidGameStateError("draw buffer cannot contain a bonus")
         if any(not is_bonus_tile(tile) for tile in player_hand.bonus_tiles):
             raise InvalidGameStateError("bonus area can contain only bonus tiles")
@@ -757,8 +759,7 @@ def validate_milestone_three_room(
     if not set(initial_ids).issubset(actual):
         raise InvalidGameStateError("initial provenance references an unknown tile")
     wall_ids = {
-        tile.tile_id
-        for tile in (*hand.wall.live_tiles, *hand.wall.reserve_tiles)
+        tile.tile_id for tile in (*hand.wall.live_tiles, *hand.wall.reserve_tiles)
     }
     held_by_seat = {
         tile.tile_id: player_hand.seat_id
@@ -769,17 +770,13 @@ def validate_milestone_three_room(
         )
     }
     discarded_by_seat = {
-        discard.tile.tile_id: discard.discarded_by_seat_id
-        for discard in hand.discards
+        discard.tile.tile_id: discard.discarded_by_seat_id for discard in hand.discards
     }
     for player_hand in hand.player_hands:
         for initial_id in player_hand.initial_tile_ids:
-            if (
-                initial_id in wall_ids
-                or (
-                    held_by_seat.get(initial_id) != player_hand.seat_id
-                    and discarded_by_seat.get(initial_id) != player_hand.seat_id
-                )
+            if initial_id in wall_ids or (
+                held_by_seat.get(initial_id) != player_hand.seat_id
+                and discarded_by_seat.get(initial_id) != player_hand.seat_id
             ):
                 raise InvalidGameStateError(
                     "raw initial provenance is not attributable to its seat"
@@ -989,12 +986,20 @@ _MILESTONE_ONE_ENGINE = MilestoneOneEngine()
 
 
 def transition(state: RoomState, action: DomainAction) -> TransitionResult:
+    if state.ruleset_version == "0.3.0":
+        from .milestone4 import MilestoneFourEngine
+
+        return MilestoneFourEngine().transition(state, action)
     if state.ruleset_version == MILESTONE_3_RULESET_VERSION:
         return MilestoneThreeEngine().transition(state, action)
     return _MILESTONE_ONE_ENGINE.transition(state, action)
 
 
 def legal_actions(state: RoomState, seat_id: SeatId) -> tuple[DomainAction, ...]:
+    if state.ruleset_version == "0.3.0":
+        from .milestone4 import MilestoneFourEngine
+
+        return MilestoneFourEngine().legal_actions(state, seat_id)
     if state.ruleset_version == MILESTONE_3_RULESET_VERSION:
         return MilestoneThreeEngine().legal_actions(state, seat_id)
     return _MILESTONE_ONE_ENGINE.legal_actions(state, seat_id)

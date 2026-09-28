@@ -357,7 +357,9 @@
   position: relative;
   min-width: 0;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  justify-content: start;
 }
 
 .discard-grid .mahjong-tile {
@@ -543,4 +545,29 @@
     align-items: start;
     flex-direction: column;
   }
+}
+
+
+.table-choice-buttons, .table-choice-tiles, .table-melds, .table-meld-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.table-choices { padding-block: 0.75rem; }
+.table-choice-buttons button {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.table-melds { margin-block: 0.75rem; gap: 1rem; }
+.table-meld { display: grid; gap: 0.25rem; }
+.table-meld > span, .discard-claimed { font-size: 0.75rem; font-weight: 600; }
+.discard-claimed {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

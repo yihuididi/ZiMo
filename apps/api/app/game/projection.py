@@ -57,7 +57,10 @@ class OpaqueActionDescriptor(GameModel):
         "invitation",
         "concealedTile",
         "drawnTile",
+        "claimActions",
+        "turnActions",
     ] = "roomActions"
+    tiles: tuple[PublicTileView, ...] = ()
     presentation_index: int | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
@@ -119,6 +122,7 @@ PublicSeatView = Annotated[
 
 
 class PublicGameView(GameModel):
+    own_claim_submitted: bool = False
     status: MatchStatus
     prevailing_wind: Wind
     dealer_seat_id: SeatId | None
@@ -245,6 +249,7 @@ def build_public_room_view(
     if observation.match is not None:
         match = observation.match
         game = PublicGameView(
+            own_claim_submitted=bool(match.own_pending_claims),
             status=match.status,
             prevailing_wind=match.prevailing_wind,
             dealer_seat_id=match.dealer_seat_id,

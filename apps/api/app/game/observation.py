@@ -18,6 +18,7 @@ from .model import (
     AwaitingDiscardPhase,
     AwaitingDrawPhase,
     CompletePhase,
+    FinalTileDecisionPhase,
     DiscardClaimsPhase,
     ExternalSeatController,
     HandResult,
@@ -99,6 +100,7 @@ class PhaseObservation(GameModel):
         "kongReplacement",
         "kongRobbery",
         "complete",
+        "finalTileDecision",
     ]
     active_seat_id: SeatId | None = None
     window_id: WindowId | None = None
@@ -199,6 +201,8 @@ def _phase_observation(phase: object) -> PhaseObservation:
             window_id=phase.window_id,
             declaring_seat_id=phase.declaring_seat_id,
         )
+    if isinstance(phase, FinalTileDecisionPhase):
+        return PhaseObservation(type="finalTileDecision", active_seat_id=phase.seat_id)
     if isinstance(phase, CompletePhase):
         return PhaseObservation(type="complete")
     raise TypeError(f"unsupported hand phase: {type(phase)!r}")
