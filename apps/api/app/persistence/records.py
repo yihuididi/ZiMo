@@ -284,8 +284,6 @@ class RoomStateRecord:
     snapshot_json: str
     room_id: str
     ruleset_id: str
-    ruleset_version: str
-    state_schema_version: int
     revision: int
     config_json: str
     created_at_ms: int

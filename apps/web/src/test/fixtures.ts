@@ -9,14 +9,12 @@ export function roomView(
   overrides: Partial<PublicRoomView> = {},
 ): PublicRoomView {
   return {
-    apiVersion: "1",
+    apiVersion: "2",
     roomId: "room-a",
     revision: 7,
     presenceVersion: 0,
     status: "WAITING_FOR_PLAYERS",
     rulesetId: "singapore",
-    rulesetVersion: "0.1.0",
-    stateSchemaVersion: 2,
     capabilities: [
       "multiplayerLobby",
       "roomEvents",
@@ -185,8 +183,6 @@ export function activeTableView(
   return roomView({
     revision: 12,
     status: "IN_MATCH",
-    rulesetVersion: "0.2.0",
-    stateSchemaVersion: 3,
     capabilities: [
       "multiplayerLobby",
       "roomEvents",

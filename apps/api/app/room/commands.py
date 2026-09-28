@@ -77,7 +77,10 @@ class RoomCommands:
         player_token = self._new_capability()
         invite_token = self._new_capability()
         try:
-            state = create_lobby_room(room_id, player_id, display_name, now_ms=now_ms)
+            state = create_lobby_room(
+                room_id, player_id, display_name,
+                now_ms=now_ms, ruleset_id=self._ruleset_id,
+            )
             player_record = self._new_player_record(
                 state, player_id, player_token, now_ms=now_ms
             )

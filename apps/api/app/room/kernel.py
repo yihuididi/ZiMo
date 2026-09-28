@@ -14,8 +14,7 @@ if __package__.startswith("app."):
         AutomatedPolicySelector,
         Clock,
         ExternalSeatController,
-        MilestoneThreeEngine,
-        VersionedPreviewEngine,
+        GameEngine,
         PlayerId,
         PublicRoomView,
         RandomSource,
@@ -26,6 +25,7 @@ if __package__.startswith("app."):
         SystemRandomSource,
         build_public_room_view,
         deserialize_room_state,
+        rules_for_id,
     )
     from ..lobby import LobbyTransition, catalog_lobby_actions
     from ..persistence import (
@@ -45,8 +45,7 @@ else:  # pragma: no cover - Python Workers load modules from the app directory.
         AutomatedPolicySelector,
         Clock,
         ExternalSeatController,
-        MilestoneThreeEngine,
-        VersionedPreviewEngine,
+        GameEngine,
         PlayerId,
         PublicRoomView,
         RandomSource,
@@ -57,6 +56,7 @@ else:  # pragma: no cover - Python Workers load modules from the app directory.
         SystemRandomSource,
         build_public_room_view,
         deserialize_room_state,
+        rules_for_id,
     )
     from lobby import LobbyTransition, catalog_lobby_actions
     from persistence import (
@@ -100,7 +100,8 @@ class RoomKernel:
         id_source: Callable[[str], str] | None = None,
         random_source: RandomSource | None = None,
         policy_selector: AutomatedPolicySelector | None = None,
-        game_engine: MilestoneThreeEngine | None = None,
+        game_engine: GameEngine | None = None,
+        ruleset_id: str = "singapore",
     ) -> None:
         self._repository = repository
         self._clock = SystemClock() if clock is None else clock
@@ -118,14 +119,24 @@ class RoomKernel:
             if policy_selector is None
             else policy_selector
         )
+        self._ruleset_id = ruleset_id
+        rules = rules_for_id(ruleset_id)
         self._game_engine = (
-            VersionedPreviewEngine(self._random_source)
-            if game_engine is None
-            else game_engine
+            rules.create_engine(self._random_source) if game_engine is None else game_engine
         )
+        self._other_engines: dict[str, GameEngine] = {}
         self._cached_state: RoomState | None = None
         self._commit_generation = 0
         self._last_sampled_time_ms: int | None = None
+
+    def _engine_for(self, state: RoomState) -> GameEngine:
+        if state.ruleset_id == self._ruleset_id:
+            return self._game_engine
+        engine = self._other_engines.get(state.ruleset_id)
+        if engine is None:
+            engine = rules_for_id(state.ruleset_id).create_engine(self._random_source)
+            self._other_engines[state.ruleset_id] = engine
+        return engine
 
     @property
     def cached_state(self) -> RoomState | None:

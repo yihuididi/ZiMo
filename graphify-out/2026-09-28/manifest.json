@@ -102,9 +102,9 @@
     "semantic_hash": ""
   },
   "apps/api/app/game/__init__.py": {
-    "mtime": 1790612404.4150252,
-    "seen": 1790612582.2045262,
-    "ast_hash": "19808d059f3daeabda716e34b07e9b71",
+    "mtime": 1790605285.7634988,
+    "seen": 1790606428.146674,
+    "ast_hash": "f2359c43ec8701212674cebcf99ae801",
     "semantic_hash": ""
   },
   "apps/api/app/game/actions.py": {
@@ -144,8 +144,8 @@
     "semantic_hash": "4aaa76546882cdb657afd9ee25360f73"
   },
   "apps/api/app/game/engine.py": {
-    "mtime": 1790612065.3122017,
-    "seen": 1790612582.2047281,
+    "mtime": 1790606348.793697,
+    "seen": 1790606428.1467981,
     "ast_hash": "9c67ac5dc1f648a8fee933066a905b86",
     "semantic_hash": ""
   },
@@ -156,20 +156,20 @@
     "semantic_hash": ""
   },
   "apps/api/app/game/model.py": {
-    "mtime": 1790612412.3643618,
-    "seen": 1790612582.204757,
-    "ast_hash": "249690b8044ce1191f8fc6cf1f69f885",
+    "mtime": 1790605270.65699,
+    "seen": 1790606428.1468291,
+    "ast_hash": "b98f75c2bf73631ec1a0b7e2dcdb282f",
     "semantic_hash": ""
   },
   "apps/api/app/game/observation.py": {
-    "mtime": 1790612065.157153,
-    "seen": 1790612582.204758,
+    "mtime": 1790605304.806871,
+    "seen": 1790606428.1468291,
     "ast_hash": "dc69f904233c86389edbf31eff2c0f78",
     "semantic_hash": ""
   },
   "apps/api/app/game/projection.py": {
-    "mtime": 1790612065.010257,
-    "seen": 1790612582.204758,
+    "mtime": 1790605304.8072677,
+    "seen": 1790606428.14683,
     "ast_hash": "b0a09564a6c4d2bb5031e64b9485e5a4",
     "semantic_hash": ""
   },
@@ -180,15 +180,15 @@
     "semantic_hash": ""
   },
   "apps/api/app/game/rules/__init__.py": {
-    "mtime": 1790612404.2322855,
-    "seen": 1790612582.204787,
-    "ast_hash": "61589d3c90f40253dc0bec636d737661",
+    "mtime": 1790605285.7640052,
+    "seen": 1790606428.1468601,
+    "ast_hash": "e3e56cda5eb657139b3161cd4a59eda1",
     "semantic_hash": ""
   },
   "apps/api/app/game/rules/singapore.py": {
-    "mtime": 1790612404.3235774,
-    "seen": 1790612582.204788,
-    "ast_hash": "fb5bdf9c87336e4c78b9ece791601ffc",
+    "mtime": 1790605256.5320888,
+    "seen": 1790606428.146861,
+    "ast_hash": "9f6914dc0e77fdbc33cbcc3e626c315d",
     "semantic_hash": ""
   },
   "apps/api/app/game/runtime.py": {
@@ -198,9 +198,9 @@
     "semantic_hash": "431660342e19d9965fbcd2ae37812f2f"
   },
   "apps/api/app/game/serialization.py": {
-    "mtime": 1790612412.5088875,
-    "seen": 1790612582.2048168,
-    "ast_hash": "ee6d42eac24c76eaf6c659b6e619bebf",
+    "mtime": 1790605304.8064084,
+    "seen": 1790606428.146891,
+    "ast_hash": "d3a18b4b399a33e252f363b1b671ef73",
     "semantic_hash": ""
   },
   "apps/api/app/game/tiles.py": {
@@ -228,9 +228,9 @@
     "semantic_hash": "781bebbd34bce7233ea68a4e2dd0845f"
   },
   "apps/api/app/lobby/state.py": {
-    "mtime": 1790612432.327489,
-    "seen": 1790612582.20493,
-    "ast_hash": "ca00ec090fc253b6927617815ca8d794",
+    "mtime": 1790605304.807908,
+    "seen": 1790606428.147007,
+    "ast_hash": "f0d36106d789669f1a4605185e4d45d4",
     "semantic_hash": ""
   },
   "apps/api/app/lobby/types.py": {
@@ -288,9 +288,9 @@
     "semantic_hash": "06cfcd748d7bd2a4048d4268e9c8908a"
   },
   "apps/api/app/persistence/validation.py": {
-    "mtime": 1790612420.3115537,
-    "seen": 1790612582.205197,
-    "ast_hash": "4c912a087e7835425da7c50d31c30147",
+    "mtime": 1790605378.1888967,
+    "seen": 1790606428.1471791,
+    "ast_hash": "95e3b1e934643830c66769ffbb9a1552",
     "semantic_hash": ""
   },
   "apps/api/app/room/__init__.py": {
@@ -306,9 +306,9 @@
     "semantic_hash": ""
   },
   "apps/api/app/room/commands.py": {
-    "mtime": 1790612432.414133,
-    "seen": 1790612582.205257,
-    "ast_hash": "8f49d3cdfd55cae07eebe8068c3c853a",
+    "mtime": 1790588856.3369741,
+    "seen": 1790589057.721654,
+    "ast_hash": "512ad598bb1079eee23532cd459c0505",
     "semantic_hash": ""
   },
   "apps/api/app/room/contracts.py": {
@@ -318,15 +318,15 @@
     "semantic_hash": ""
   },
   "apps/api/app/room/gameplay.py": {
-    "mtime": 1790612063.5116315,
-    "seen": 1790612582.205287,
-    "ast_hash": "90259f392a54866ff2114f20b9b04c76",
+    "mtime": 1790605322.2326682,
+    "seen": 1790606428.147297,
+    "ast_hash": "c6676c870090b81f752a0703beed9a9c",
     "semantic_hash": ""
   },
   "apps/api/app/room/kernel.py": {
-    "mtime": 1790612446.2366223,
-    "seen": 1790612582.205288,
-    "ast_hash": "8e09bcf1f0294b5328cd00f86c9931d1",
+    "mtime": 1790605322.2324371,
+    "seen": 1790606428.147297,
+    "ast_hash": "b8a2970dc8f0e60e59d6dc326e4c96de",
     "semantic_hash": ""
   },
   "apps/api/app/room/orchestrator.py": {
@@ -588,8 +588,8 @@
     "semantic_hash": ""
   },
   "apps/web/src/features/room/table/TableView.tsx": {
-    "mtime": 1790612063.2063522,
-    "seen": 1790612582.206923,
+    "mtime": 1790606209.0724397,
+    "seen": 1790606428.148287,
     "ast_hash": "96f4414871ddb8efb410ece7f477b5f1",
     "semantic_hash": ""
   },
@@ -1452,8 +1452,8 @@
     "semantic_hash": ""
   },
   "apps/api/app/game/singapore_game.py": {
-    "mtime": 1790612063.6718168,
-    "seen": 1790612582.204818,
+    "mtime": 1790606353.945871,
+    "seen": 1790606428.146892,
     "ast_hash": "76950d9c867b61360c9cdbfa59251b1d",
     "semantic_hash": ""
   },
@@ -1464,21 +1464,15 @@
     "semantic_hash": ""
   },
   "apps/api/tests/test_game_setup.py": {
-    "mtime": 1790613454.9113002,
-    "seen": 1790613465.353276,
-    "ast_hash": "3288a9db301209658485feaff1100ad9",
+    "mtime": 1790606308.3587582,
+    "seen": 1790606428.14766,
+    "ast_hash": "74a84770afd9f273d5089b27723726dd",
     "semantic_hash": ""
   },
   "apps/api/tests/test_room_claims.py": {
     "mtime": 1790605523.5109274,
     "seen": 1790606428.147727,
     "ast_hash": "cd5155363375fedb68449c6142061be5",
-    "semantic_hash": ""
-  },
-  "apps/api/tests/test_rules_registry.py": {
-    "mtime": 1790612063.9795747,
-    "seen": 1790612582.206152,
-    "ast_hash": "588050a09990fe2fbba72c2ecc09b816",
     "semantic_hash": ""
   }
 }

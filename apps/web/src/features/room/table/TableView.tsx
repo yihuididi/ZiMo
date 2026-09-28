@@ -296,7 +296,6 @@ export function TableView({
   const groupLocked = gameplayOperations.length > 0;
   const claimCountdown = useDeadlineCountdown({ deadlineMs: view.deadlineMs, serverTimeMs: view.serverTimeMs, windowId: view.windowId });
   const choiceActions = view.actions.filter(action => action.presentationSlot === "claimActions" || action.presentationSlot === "turnActions");
-  const claimsEnabled = view.capabilities.includes("chow");
   const hasDiscardActions = view.actions.some((action) =>
     isGameplayPresentationSlot(action.presentationSlot),
   );
@@ -331,7 +330,7 @@ export function TableView({
 
       <div className="table-title-row">
         <div>
-          <p>Preview ruleset · Revision {view.revision}</p>
+          <p>Singapore ruleset · Revision {view.revision}</p>
           <PageHeading focusOnMount>Mahjong table</PageHeading>
         </div>
         <div className="wall-summary" aria-label="Wall tile counts">
@@ -342,16 +341,12 @@ export function TableView({
       </div>
 
       <aside className="preview-notice" aria-label="Preview limitations">
-        <strong>{claimsEnabled ? "Milestone 4 preview" : "Milestone 3 preview"}</strong>
-        <span>
-          {claimsEnabled
-            ? "Game, Kong-1, scoring and payments, settings, and additional hands are unavailable."
-            : "Claims and melds, wins, scoring and payments, settings, and additional hands are intentionally unavailable."}
-        </span>
+        <strong>Game preview</strong>
+        <span>Game, Kong-1, scoring and payments, settings, and additional hands are unavailable.</span>
       </aside>
 
       <PhaseStatus view={view} />
-      {claimsEnabled && (choiceActions.length > 0 || view.game?.ownClaimSubmitted) && (
+      {(choiceActions.length > 0 || view.game?.ownClaimSubmitted) && (
         <section className="table-choices" aria-label="Table choices">
           {view.game?.ownClaimSubmitted
             ? <p role="status">Choice recorded. Waiting for the window to close.</p>

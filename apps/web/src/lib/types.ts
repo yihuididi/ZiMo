@@ -228,14 +228,12 @@ export interface PublicGameView {
 }
 
 export interface PublicRoomView {
-  apiVersion: "1";
+  apiVersion: "2";
   roomId: string;
   revision: number;
   presenceVersion: number;
   status: RoomStatus;
   rulesetId: string;
-  rulesetVersion: string;
-  stateSchemaVersion: number;
   capabilities: RoomCapability[];
   config: GameConfig;
   viewerPlayerId: string;

@@ -35,7 +35,7 @@ function renderTable(
   return { onRunAction, onRetryAction };
 }
 
-describe("Milestone 3 table", () => {
+describe("Game table", () => {
   afterEach(() => {
     vi.clearAllTimers();
     vi.useRealTimers();
@@ -93,7 +93,7 @@ describe("Milestone 3 table", () => {
     expect(screen.getByRole("img", { name: "North Wind" })).toBeVisible();
 
     expect(screen.getByLabelText("Preview limitations")).toHaveTextContent(
-      "Claims and melds, wins, scoring and payments, settings, and additional hands",
+      "Game, Kong-1, scoring and payments, settings, and additional hands",
     );
     expect(document.body.innerHTML).not.toContain("opaque-discard");
     expect(document.body.innerHTML).not.toContain("tileId");
@@ -231,11 +231,9 @@ describe("Milestone 3 table", () => {
   });
 });
 
-describe("Milestone 4 table", () => {
+describe("Claim actions at the table", () => {
   function claimView(): PublicRoomView {
     const view = activeTableView();
-    view.rulesetVersion = "0.3.0";
-    view.stateSchemaVersion = 4;
     view.capabilities.push("chow", "pong", "kong3", "kong4");
     view.windowId = "window-4";
     view.deadlineMs = view.serverTimeMs + 3000;

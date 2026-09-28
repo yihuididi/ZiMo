@@ -1009,38 +1009,10 @@ describe("room UI", () => {
     expect(screen.getByRole("button", { name: "Ready" })).toBeEnabled();
   });
 
-  it("keeps a legacy ruleset match explicit and non-playable", () => {
+  it("shows a transient preparing state for a match setup", () => {
     openHostLobby(
       roomView({
         status: "IN_MATCH",
-        game: {
-          status: "PENDING_SETUP",
-          prevailingWind: "EAST",
-          dealerSeatId: null,
-          phase: null,
-          liveWallTileCount: 0,
-          reserveWallTileCount: 0,
-          discards: [],
-          balances: [],
-          result: null,
-          matchResult: null,
-        },
-      }),
-    );
-    expect(
-      screen.getByRole("heading", {
-        name: "This legacy match is not playable",
-      }),
-    ).toBeVisible();
-    expect(screen.getByText(/started with ruleset v0.1.0/i)).toBeVisible();
-    expect(screen.queryByText("Copy invitation link")).not.toBeInTheDocument();
-  });
-
-  it("shows a transient preparing state for a playable ruleset setup", () => {
-    openHostLobby(
-      roomView({
-        status: "IN_MATCH",
-        rulesetVersion: "0.2.0",
         game: {
           status: "PENDING_SETUP",
           prevailingWind: "EAST",

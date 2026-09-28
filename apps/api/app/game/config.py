@@ -8,12 +8,7 @@ from .base import GameModel
 
 
 class GameConfig(GameModel):
-    """The complete normalized configuration shape reserved by the roadmap.
-
-    Milestone 1 does not make these options editable or playable.  Defining the
-    final shape now lets snapshots remain stable as capabilities are enabled by
-    later ruleset versions.
-    """
+    """Normalized settings reserved for future Singapore game features."""
 
     shooter_mode: bool = False
     minimum_fan: int = Field(default=1, gt=0)

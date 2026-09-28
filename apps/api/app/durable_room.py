@@ -53,7 +53,9 @@ class GameRoom(DurableObject):
         self._orchestrator = RoomOrchestrator(repository)
 
         async def initialize_schema() -> None:
-            repository.initialize_schema()
+            reset = repository.initialize_schema()
+            if reset:
+                await self.ctx.storage.deleteAlarm()
             existing_alarm = await self.ctx.storage.getAlarm()
             now_ms = self._orchestrator.sample_time_ms()
             _live, presence_changed = self._reconcile_open_socket_presence(
@@ -380,11 +382,6 @@ class GameRoom(DurableObject):
             return
         if current_alarm is None or int(current_alarm) != deadline_ms:
             await self.ctx.storage.setAlarm(deadline_ms)
-
-    async def _reschedule_presence_alarm(self) -> None:
-        """Compatibility alias for test-only Milestone 2 probes."""
-
-        await self._reschedule_room_alarm()
 
     def _open_socket_identities(self) -> set[tuple[str, int]]:
         """Rediscover live identities without relying on in-memory socket state."""

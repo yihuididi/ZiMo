@@ -97,24 +97,6 @@ export function LobbyView({
             <SeatList view={view} />
           </section>
 
-          {view.status === "IN_MATCH" &&
-            view.game?.status === "PENDING_SETUP" && (
-              <section
-                className="panel setup-panel"
-                aria-labelledby="setup-heading"
-              >
-                <p className="step-label">Match created</p>
-                <h2 id="setup-heading">
-                  This legacy match is not playable
-                </h2>
-                <p>
-                  This room was started with ruleset v{view.rulesetVersion},
-                  before draw/discard play was enabled. Its roster and rules
-                  remain locked; create a new room for the latest preview.
-                </p>
-              </section>
-            )}
-
           <RulesCard view={view} />
         </div>
 

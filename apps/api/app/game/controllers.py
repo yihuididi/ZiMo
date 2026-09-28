@@ -47,11 +47,10 @@ class RandomBotPolicy:
     ) -> DomainAction:
         if not legal_actions:
             raise NoLegalActionsError("the automated seat has no legal actions")
-        if observation.ruleset_version == "0.3.0":
-            for kind in (Kong, Pong, Chow, Pass):
-                choices = tuple(a for a in legal_actions if isinstance(a, kind))
-                if choices:
-                    return choices[0]
+        for kind in (Kong, Pong, Chow, Pass):
+            choices = tuple(a for a in legal_actions if isinstance(a, kind))
+            if choices:
+                return choices[0]
         return legal_actions[rng.randbelow(len(legal_actions))]
 
 

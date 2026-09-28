@@ -2,13 +2,7 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
-
-if __package__ == "persistence":  # Python Workers load from the app directory.
-    from game import RoomState
-else:
-    from ..game import RoomState
 
 from .errors import UnsupportedSchemaVersionError
 from .records import _now_ms, _require_non_negative_int
@@ -21,12 +15,13 @@ from .sql import (
 
 _ROOM_STATE_SINGLETON_ID = 1
 _DISCONNECT_GRACE_MS = 300_000
-_LATEST_SCHEMA_VERSION = 4
+_LATEST_SCHEMA_VERSION = 5
 _MIGRATION_NAMES = {
     1: "milestone_1_foundation",
     2: "milestone_2_room_security",
     3: "milestone_2_player_presence",
     4: "milestone_3_gameplay_deadline",
+    5: "current_room_schema",
 }
 _REQUIRED_APPLICATION_TABLES = {
     "_sql_schema_migrations",
@@ -48,8 +43,6 @@ _MIGRATION_ONE_STATEMENTS = (
         room_id TEXT NOT NULL UNIQUE,
         snapshot_json TEXT NOT NULL CHECK (json_valid(snapshot_json)),
         ruleset_id TEXT NOT NULL,
-        ruleset_version TEXT NOT NULL,
-        state_schema_version INTEGER NOT NULL CHECK (state_schema_version > 0),
         revision INTEGER NOT NULL CHECK (revision >= 0),
         config_json TEXT NOT NULL CHECK (json_valid(config_json)),
         created_at_ms INTEGER NOT NULL CHECK (created_at_ms >= 0),
@@ -166,15 +159,15 @@ def initialize_schema(
     executor: SynchronousSqlExecutor,
     *,
     applied_at_ms: int | None = None,
-) -> None:
-    """Apply all application SQL migrations in one synchronous transaction."""
+) -> bool:
+    """Create the current schema, resetting databases from older releases once."""
 
     timestamp = _now_ms() if applied_at_ms is None else applied_at_ms
     _require_non_negative_int(timestamp, "applied_at_ms")
 
-    def migrate() -> None:
+    def migrate() -> bool:
         existing_tables = application_table_names(executor)
-        if "_sql_schema_migrations" not in existing_tables and existing_tables:
+        if existing_tables and "_sql_schema_migrations" not in existing_tables:
             raise UnsupportedSchemaVersionError(
                 "application tables exist without migration history"
             )
@@ -194,215 +187,48 @@ def initialize_schema(
             (int(_row_value(row, "id")), str(_row_value(row, "name")))
             for row in history_rows
         ]
-        expected_history = [
+        if history == [(5, _MIGRATION_NAMES[5])]:
+            if application_table_names(executor) != _REQUIRED_APPLICATION_TABLES:
+                raise UnsupportedSchemaVersionError("application SQL table set is invalid")
+            return False
+
+        legacy_history = [
             (migration_id, _MIGRATION_NAMES[migration_id])
-            for migration_id in range(1, _LATEST_SCHEMA_VERSION + 1)
+            for migration_id in range(1, 5)
         ]
-        if history != expected_history[: len(history)]:
+        if history and history != legacy_history[:len(history)]:
             raise UnsupportedSchemaVersionError(
                 f"unsupported SQL migration history: {history!r}"
             )
-
         if not history and existing_tables - {"_sql_schema_migrations"}:
             raise UnsupportedSchemaVersionError(
                 "application tables exist without a recorded migration"
             )
+        if existing_tables - _REQUIRED_APPLICATION_TABLES:
+            raise UnsupportedSchemaVersionError("application SQL table set is invalid")
 
-        if len(history) < 1:
-            for statement in _MIGRATION_ONE_STATEMENTS:
-                executor.exec(statement)
-            executor.exec(
-                """
-                INSERT INTO _sql_schema_migrations (id, name, applied_at_ms)
-                VALUES (?, ?, ?)
-                """,
-                1,
-                _MIGRATION_NAMES[1],
-                timestamp,
-            )
-            history.append((1, _MIGRATION_NAMES[1]))
-
-        if len(history) < 2:
-            for statement in _MIGRATION_TWO_STATEMENTS:
-                executor.exec(statement)
-            executor.exec(
-                """
-                INSERT INTO _sql_schema_migrations (id, name, applied_at_ms)
-                VALUES (?, ?, ?)
-                """,
-                2,
-                _MIGRATION_NAMES[2],
-                timestamp,
-            )
-            history.append((2, _MIGRATION_NAMES[2]))
-
-        if len(history) < 3:
-            for statement in _MIGRATION_THREE_STATEMENTS:
-                executor.exec(statement)
-            executor.exec(
-                """
-                INSERT INTO player_presence (
-                    player_id, auth_generation, disconnected_at_ms,
-                    disconnect_expires_at_ms
-                )
-                SELECT player_id, auth_generation, ?,
-                       CASE
-                           WHEN EXISTS (
-                               SELECT 1
-                               FROM room_state
-                               WHERE json_extract(snapshot_json, '$.status')
-                                   IN ('IN_MATCH', 'FINISHED')
-                           ) THEN NULL
-                           ELSE ?
-                       END
-                FROM players
-                WHERE left_at_ms IS NULL
-                """,
-                timestamp,
-                timestamp + _DISCONNECT_GRACE_MS,
-            )
-            executor.exec(
-                """
-                UPDATE room_presence
-                SET presence_version = 1
-                WHERE singleton_id = ?
-                  AND EXISTS (SELECT 1 FROM player_presence)
-                """,
-                _ROOM_STATE_SINGLETON_ID,
-            )
-            executor.exec(
-                """
-                INSERT INTO _sql_schema_migrations (id, name, applied_at_ms)
-                VALUES (?, ?, ?)
-                """,
-                3,
-                _MIGRATION_NAMES[3],
-                timestamp,
-            )
-            history.append((3, _MIGRATION_NAMES[3]))
-
-        if len(history) < 4:
-            upgrade_room_snapshots_to_v3(executor)
-            executor.exec(
-                """
-                INSERT INTO _sql_schema_migrations (id, name, applied_at_ms)
-                VALUES (?, ?, ?)
-                """,
-                4,
-                _MIGRATION_NAMES[4],
-                timestamp,
-            )
-            history.append((4, _MIGRATION_NAMES[4]))
-
-        actual_tables = application_table_names(executor)
-        if actual_tables != _REQUIRED_APPLICATION_TABLES:
-            missing = sorted(_REQUIRED_APPLICATION_TABLES - actual_tables)
-            unexpected = sorted(actual_tables - _REQUIRED_APPLICATION_TABLES)
-            raise UnsupportedSchemaVersionError(
-                "application SQL table set is invalid; "
-                f"missing={missing!r}, unexpected={unexpected!r}"
-            )
-
-    executor.transaction(migrate)
-
-
-def upgrade_room_snapshots_to_v2(executor: SynchronousSqlExecutor) -> None:
-    """Rewrite v1 room JSON canonically while preserving revision/history."""
-
-    rows = _rows(
+        # Room identity, tokens, audit history, and alarms all belong to the
+        # retired room. Recreate every application table in one SQL transaction.
+        for table in sorted(existing_tables - {"_sql_schema_migrations"}):
+            executor.exec(f"DROP TABLE {table}")
+        for statement in (
+            *_MIGRATION_ONE_STATEMENTS,
+            *_MIGRATION_TWO_STATEMENTS,
+            *_MIGRATION_THREE_STATEMENTS,
+        ):
+            executor.exec(statement)
+        executor.exec("DELETE FROM _sql_schema_migrations")
         executor.exec(
-            """
-            SELECT singleton_id, snapshot_json
-            FROM room_state
-            WHERE state_schema_version = 1
-            """
+            "INSERT INTO _sql_schema_migrations (id, name, applied_at_ms) VALUES (?, ?, ?)",
+            5,
+            _MIGRATION_NAMES[5],
+            timestamp,
         )
-    )
-    for row in rows:
-        try:
-            value = json.loads(str(_row_value(row, "snapshot_json")))
-            marker = value.get("stateSchemaVersion") if type(value) is dict else None
-            if type(value) is not dict or type(marker) is not int or marker != 1:
-                raise ValueError("schema metadata is inconsistent")
-            match = value.get("match")
-            if isinstance(match, dict) and match.get("status") == "PENDING_SETUP":
-                raise ValueError("schema-v1 snapshot contains a v2-only match")
-            value["stateSchemaVersion"] = 2
-            state = RoomState.model_validate_json(
-                json.dumps(
-                    value,
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                    sort_keys=True,
-                ),
-                strict=True,
-            )
-            snapshot_json = state.canonical_json()
-        except Exception as exc:
-            raise UnsupportedSchemaVersionError(
-                "cannot upgrade a stored schema-v1 room snapshot"
-            ) from exc
-        executor.exec(
-            """
-            UPDATE room_state
-            SET snapshot_json = ?, state_schema_version = 2
-            WHERE singleton_id = ? AND state_schema_version = 1
-            """,
-            snapshot_json,
-            int(_row_value(row, "singleton_id")),
-        )
+        if application_table_names(executor) != _REQUIRED_APPLICATION_TABLES:
+            raise UnsupportedSchemaVersionError("application SQL table set is invalid")
+        return bool(history)
 
-
-def upgrade_room_snapshots_to_v3(executor: SynchronousSqlExecutor) -> None:
-    """Add canonical persisted deadline metadata to legacy room snapshots."""
-
-    rows = _rows(
-        executor.exec(
-            """
-            SELECT singleton_id, state_schema_version, snapshot_json
-            FROM room_state
-            WHERE state_schema_version IN (1, 2)
-            """
-        )
-    )
-    for row in rows:
-        stored_version = int(_row_value(row, "state_schema_version"))
-        try:
-            value = json.loads(str(_row_value(row, "snapshot_json")))
-            marker = value.get("stateSchemaVersion") if type(value) is dict else None
-            if type(value) is not dict or type(marker) is not int:
-                raise ValueError("schema metadata is missing")
-            if marker != stored_version or marker not in {1, 2}:
-                raise ValueError("schema metadata is inconsistent")
-            match = value.get("match")
-            if marker == 1 and isinstance(match, dict) and match.get("status") == "PENDING_SETUP":
-                raise ValueError("schema-v1 snapshot contains a v2-only match")
-            value["stateSchemaVersion"] = 3
-            value["pendingDeadline"] = None
-            state = RoomState.model_validate_json(
-                json.dumps(
-                    value,
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                    sort_keys=True,
-                ),
-                strict=True,
-            )
-            snapshot_json = state.canonical_json()
-        except Exception as exc:
-            raise UnsupportedSchemaVersionError(
-                "cannot upgrade a stored schema-v1/v2 room snapshot"
-            ) from exc
-        executor.exec(
-            """
-            UPDATE room_state
-            SET snapshot_json = ?, state_schema_version = 3
-            WHERE singleton_id = ? AND state_schema_version = ?
-            """,
-            snapshot_json,
-            int(_row_value(row, "singleton_id")),
-            stored_version,
-        )
+    return executor.transaction(migrate)
 
 
 def application_table_names(executor: SynchronousSqlExecutor) -> set[str]:

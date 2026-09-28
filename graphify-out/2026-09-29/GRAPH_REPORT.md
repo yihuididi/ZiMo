@@ -1,12 +1,12 @@
-# Graph Report - ZiMo  (2026-09-29)
+# Graph Report - ZiMo  (2026-09-28)
 
 ## Corpus Check
-- 196 files · ~421,252 words
+- 196 files · ~421,330 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 22 file(s) not represented in the graph (top: .toml 5, (none) 5, .css 4)
 
 ## Summary
-- 2726 nodes · 8489 edges · 153 communities (125 shown, 28 thin omitted)
+- 2730 nodes · 8501 edges · 149 communities (123 shown, 26 thin omitted)
 - Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 492 edges (avg confidence: 0.92)
 - Token cost: 0 input · 0 output
 
@@ -17,24 +17,24 @@
 
 ## Community Hubs (Navigation)
 - live-browser.js
-- state.py
-- tiles.py
+- PlayerId
+- test_game_setup.py
 - resumeSession
-- model_validator
+- test_game_invariant_matrix.py
 - setLiveState
-- RoomId
-- game/__init__.py
+- GameConfig
+- GameModel
 - persistence/__init__.py
 - test_persistence.py
 - modern-screenshot.umd.js
 - kernel.py
 - el
 - initPageChat
-- test_game_claims.py
+- rules_for_id
 - repository.py
 - worker.integration.test.mjs
 - http_api.py
-- rules_for_id
+- test_rules_registry.py
 - initGlobalBar
 - GameRoom
 - RoomGameplayTests
@@ -48,22 +48,22 @@
 - TableView.tsx
 - types.ts
 - api.ts
-- worker_runtime.py
-- test_game_domain.py
+- TestGameRoom
+- game/__init__.py
 - durable_room.py
-- SeatId
-- RoomState
+- model.py
+- RoomGameplay
 - test_room_lobby.py
 - handleManualEditActivity
 - CorruptRoomStateError
 - session.ts
-- test_game_setup.py
+- RoomState
 - RoomKernel
 - worker_entry.py
 - PlayerPresenceRecord
 - resolveLiveInjectionAnchor
 - Any
-- GameConfig
+- build_public_room_view
 - compilerOptions
 - createLiveBrowserSessionState
 - log_unexpected
@@ -78,7 +78,7 @@
 - Native technical audit
 - Graphify incremental updates
 - Visualize direction comps
-- PlayerId
+- T
 - Q: How does RoomState connect gameplay, privacy, persistence, and recovery?
 - SeatList.tsx
 - Graphify knowledge graph
@@ -105,7 +105,7 @@
 - Graphify media transcription
 - Project graphify rules
 - Milestone 3 implementation
-- standard_seats
+- AllBonusChainRandomSource
 - White dragon tile
 - Bamboo flower tile
 - Chrysanthemum flower tile
@@ -147,8 +147,6 @@
 - Design Tokens
 - Earned Familiarity
 - playwright_sync_api
-- .consume_socket_ticket
-- Clock
 - src main.tsx module
 - Green tile back
 - Bamboo one tile
@@ -167,26 +165,24 @@
 - Blue three above pink wan
 - Blue four above pink wan
 - mahjong-api
-- .reconcile_socket_presence
-- DeterministicCapabilities
 
 ## God Nodes (most connected - your core abstractions)
-1. `RoomState` - 148 edges
+1. `RoomState` - 150 edges
 2. `SeatId` - 127 edges
 3. `GameModel` - 98 edges
 4. `RoomRepository` - 85 edges
 5. `PlayerId` - 68 edges
-6. `SingaporeGameEngine` - 63 edges
+6. `SingaporeGameEngine` - 61 edges
 7. `WindowId` - 44 edges
-8. `GameConfig` - 40 edges
-9. `validate_room()` - 39 edges
-10. `HandState` - 38 edges
+8. `HandState` - 38 edges
+9. `GameConfig` - 37 edges
+10. `validate_room()` - 37 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Web Application Testing` --semantically_similar_to--> `CPython Pyodide and workerd testing`  [INFERRED] [semantically similar]
-  .agents/skills/webapp-testing/SKILL.md → README.md
 - `GameRoom Durable Object` --semantically_similar_to--> `GAME_ROOM Durable Object`  [INFERRED] [semantically similar]
   PLAN.md → README.md
+- `Web Application Testing` --semantically_similar_to--> `CPython Pyodide and workerd testing`  [INFERRED] [semantically similar]
+  .agents/skills/webapp-testing/SKILL.md → README.md
 - `One hand draw discard preview` --semantically_similar_to--> `Capability gated preview`  [INFERRED] [semantically similar]
   PRODUCT.md → PLAN.md
 - `Owner selected mahjong tile artwork` --semantically_similar_to--> `FluffyStuff Riichi Mahjong Tiles`  [INFERRED] [semantically similar]
@@ -200,51 +196,55 @@
 ## Hyperedges (group relationships)
 - **Server authoritative room stack** — readme_react_cloudflare_pages_frontend, readme_fastapi_python_worker, readme_game_room_durable_object, readme_sqlite_room_state_snapshot, readme_hibernating_websockets [EXTRACTED 1.00]
 
-## Communities (153 total, 28 thin omitted)
+## Communities (149 total, 26 thin omitted)
 
 ### Community 0 - "live-browser.js"
 Cohesion: 0.03
 Nodes (146): addManualContextText(), applyGlobalBarLabelState(), applyPlaceholderSizingStyles(), averageRgb01(), bindEditBadgeProxy(), bufferToBase64(), buildCollapsible(), buildColorModels() (+138 more)
 
-### Community 1 - "state.py"
-Cohesion: 0.15
-Nodes (41): PlayerState, SeatState, _add_bots(), apply_lobby_action(), _can_start(), Pure lobby action catalogue, resolution, and application., _start(), Stable public facade for pure lobby policy and transitions. (+33 more)
+### Community 1 - "PlayerId"
+Cohesion: 0.07
+Nodes (68): PlayerId, PlayerState, SeatState, _action_id(), _add_bots(), apply_lobby_action(), _can_start(), catalog_lobby_actions() (+60 more)
 
-### Community 2 - "tiles.py"
-Cohesion: 0.21
-Nodes (12): TileFamily, canonical_face_counts(), canonical_physical_deck(), canonical_tile_faces(), is_bonus_face(), Canonical Singapore tile manifest, physical deck, and server sort order., Return the exact 46 logical faces in stable server order., Build the 148 pre-shuffle templates later relabeled by the engine. (+4 more)
+### Community 2 - "test_game_setup.py"
+Cohesion: 0.13
+Nodes (22): MatchCompletionRequested, Ask room orchestration to finalize a clock-free completed preview., PendingDeadline, Logical face shared by one or more uniquely identified physical tiles., Canonical room-owned deadline for the active discard window., TileFace, TileFamily, canonical_face_counts() (+14 more)
 
 ### Community 3 - "resumeSession"
 Cohesion: 0.06
 Nodes (86): applyParamDefaults(), applyParamValue(), applyPlaceholderDimensions(), applySavedSessionMeta(), clampVariantIndex(), clearHandled(), clearSession(), closedClipPath() (+78 more)
 
+### Community 4 - "test_game_invariant_matrix.py"
+Cohesion: 0.08
+Nodes (33): AutomatedSeatController, ExternalSeatController, HandResult, MatchId, MatchResult, MatchState, MeldState, Payment (+25 more)
+
 ### Community 5 - "setLiveState"
 Cohesion: 0.09
 Nodes (71): abandonForeignSession(), abortSvelteComponentInjection(), applyEditing(), beginNewLiveConfiguration(), cancelEditing(), cancelEditingToPicking(), cancelInsertConfigure(), cleanup() (+63 more)
 
-### Community 6 - "RoomId"
-Cohesion: 0.06
-Nodes (35): AutomatedPolicy, AutomatedPolicySelector, choose_automated_action(), NoLegalActionsError, DomainAction, Protocol, RuntimeError, RandomBotPolicy (+27 more)
+### Community 6 - "GameConfig"
+Cohesion: 0.04
+Nodes (40): canonical_json(), BaseModel, Canonicalize an arbitrary Pydantic model using the domain convention., Public capabilities of the Singapore game., GameConfig, model_validator, Normalized settings reserved for future Singapore game features., AutomatedPolicy (+32 more)
 
-### Community 7 - "game/__init__.py"
-Cohesion: 0.08
-Nodes (66): canonical_json(), GameModel, BaseModel, Shared modelling and canonical-serialization primitives for the game domain., Immutable, strict base model used by every persisted domain value. Attribute…, Canonicalize an arbitrary Pydantic model using the domain convention., Public capabilities of the Singapore game., Immutable Singapore Mahjong configuration values. (+58 more)
+### Community 7 - "GameModel"
+Cohesion: 0.11
+Nodes (48): GameModel, Shared modelling and canonical-serialization primitives for the game domain., Immutable, strict base model used by every persisted domain value. Attribute…, Immutable Singapore Mahjong configuration values., AwaitingDiscardPhase, CompletePhase, DiscardClaimsPhase, FinalTileDecisionPhase (+40 more)
 
 ### Community 8 - "persistence/__init__.py"
-Cohesion: 0.10
-Nodes (37): Stable public facade for Mahjong room persistence. The Worker loads this module…, _audit_payload_json(), _canonical_json_value(), _canonicalize_json_text(), GameplayAuditPayload, _identity_text(), LobbyAuditPayload, _optional_text() (+29 more)
+Cohesion: 0.09
+Nodes (40): Stable public facade for Mahjong room persistence. The Worker loads this module…, _audit_payload_json(), _canonical_json_value(), _canonicalize_json_text(), GameplayAuditPayload, _identity_text(), LobbyAuditPayload, _optional_text() (+32 more)
 
 ### Community 9 - "test_persistence.py"
 Cohesion: 0.11
-Nodes (51): CommandId, Any, Create the schema, returning whether an older room was reset., Synchronous repository for one room per SQL database., RoomRepository, Adapter for a CPython ``sqlite3.Connection``. The connection is switched to…, SQLiteSqlExecutor, committed_event() (+43 more)
+Nodes (49): CommandId, Any, Create the schema, returning whether an older room was reset., Synchronous repository for one room per SQL database., RoomRepository, committed_event(), database(), initialized_event() (+41 more)
 
 ### Community 10 - "modern-screenshot.umd.js"
 Cohesion: 0.09
 Nodes (55): ae(), be(), bt(), Ce(), s(), Ct(), de(), dt() (+47 more)
 
 ### Community 11 - "kernel.py"
-Cohesion: 0.12
-Nodes (31): canonical_json(), command_fingerprint(), derive_rotated_invite(), project_event(), Any, CommandResult, Canonical validation, hashing, and projection helpers for room services., require_non_negative_int() (+23 more)
+Cohesion: 0.11
+Nodes (34): canonical_json(), command_fingerprint(), derive_rotated_invite(), lobby_service_error(), parse_complete_config(), project_event(), Any, CommandResult (+26 more)
 
 ### Community 12 - "el"
 Cohesion: 0.08
@@ -254,13 +254,13 @@ Nodes (54): actionLabel(), applyConfigureBarChrome(), bindConfigureCountPillTool
 Cohesion: 0.07
 Nodes (54): agentHasWorkInFlight(), armPageChatForTyping(), attachSteerFocusDebug(), attachSteerFocusGuard(), buildSteerProcessingDots(), buildSteerQueueHint(), clearSteerAwaitTimer(), clearSteerFocusRecoverTimer() (+46 more)
 
-### Community 14 - "test_game_claims.py"
-Cohesion: 0.09
-Nodes (19): PendingDeadline, Canonical room-owned deadline for the active discard window., serialize_room_state(), Any, _updated(), ArrangedDeck, ClaimTests, discard_draw() (+11 more)
+### Community 14 - "rules_for_id"
+Cohesion: 0.10
+Nodes (12): Any, rules_for_id(), canonicalize_room_snapshot(), deserialize_room_state(), Canonical room snapshot encoding helpers., serialize_room_state(), ArrangedDeck, ClaimTests (+4 more)
 
 ### Community 15 - "repository.py"
 Cohesion: 0.07
-Nodes (39): PersistenceError, ProcessedCommandConflictError, RuntimeError, Stable persistence failures with application-level meaning., Raised when a Durable Object has already been initialized., Raised when a commit is attempted before room initialization., Raised when an optimistic compare-and-swap revision is stale., Raised when storage was written by a newer or inconsistent schema. (+31 more)
+Nodes (41): PersistenceError, ProcessedCommandConflictError, RuntimeError, Stable persistence failures with application-level meaning., Raised when a Durable Object has already been initialized., Raised when a commit is attempted before room initialization., Raised when an optimistic compare-and-swap revision is stale., Raised when storage was written by a newer or inconsistent schema. (+33 more)
 
 ### Community 16 - "worker.integration.test.mjs"
 Cohesion: 0.06
@@ -270,9 +270,9 @@ Nodes (39): devDependencies, vitest, wrangler, ws, engines, node, vitest, name (
 Cohesion: 0.11
 Nodes (45): api_problem_handler(), CommandRequest, create_room(), CreateRoomRequest, _error_response(), _existing_room_stub(), get_events(), get_room() (+37 more)
 
-### Community 18 - "rules_for_id"
-Cohesion: 0.13
-Nodes (9): rules_for_id(), AlternateEngine, AlternateRules, GameConfig, A registered ruleset controls engine creation and room metadata., test_registered_ruleset_selects_engine_for_new_and_reloaded_rooms(), test_unknown_ruleset_is_rejected(), MonkeyPatch (+1 more)
+### Community 18 - "test_rules_registry.py"
+Cohesion: 0.11
+Nodes (9): Validate and return the immutable normalized configuration., AlternateEngine, AlternateRules, GameConfig, A registered ruleset controls engine creation and room metadata., test_registered_ruleset_selects_engine_for_new_and_reloaded_rooms(), test_unknown_ruleset_is_rejected(), MonkeyPatch (+1 more)
 
 ### Community 19 - "initGlobalBar"
 Cohesion: 0.08
@@ -299,8 +299,8 @@ Cohesion: 0.14
 Nodes (27): CommandStatus(), CommandStatusProps, CopyState, InvitePanel(), copyInvitation(), InvitePanelProps, LobbyViewProps, ActionEntryProps (+19 more)
 
 ### Community 25 - "validation.py"
-Cohesion: 0.18
-Nodes (20): PlayerProjectionError, Raised when authentication projections disagree with canonical state., PlayerRecord, Authentication data plus a queryable projection of a room player., _validate_player(), Apply one public presence change and bump its version at most once., commit(), update() (+12 more)
+Cohesion: 0.11
+Nodes (31): PlayerProjectionError, Raised when authentication projections disagree with canonical state., PlayerRecord, Canonical state together with the duplicated indexed metadata., Authentication data plus a queryable projection of a room player., RoomStateRecord, Apply one public presence change and bump its version at most once., Create the canonical room and its supplied projections atomically. (+23 more)
 
 ### Community 26 - "mountSvelteComponentVariant"
 Cohesion: 0.08
@@ -311,8 +311,8 @@ Cohesion: 0.07
 Nodes (32): Earned Delight, Emotional Moment, Design Simplification, Progressive Disclosure, Artifact Drift Repair, Schema Drift, DESIGN.md, Design System Documentation (+24 more)
 
 ### Community 28 - ".create"
-Cohesion: 0.17
-Nodes (7): descriptor_id(), RoomCommandTests, RoomCreationAndAuthenticationTests, RoomOrchestratorTestCase, RoomPresenceTests, RoomTicketsEventsAndAtomicityTests, sha256()
+Cohesion: 0.11
+Nodes (10): FixedClock, descriptor_id(), DeterministicCapabilities, DeterministicIds, RoomCommandTests, RoomCreationAndAuthenticationTests, RoomOrchestratorTestCase, RoomPresenceTests (+2 more)
 
 ### Community 29 - "TableView.tsx"
 Cohesion: 0.14
@@ -326,48 +326,48 @@ Nodes (53): DiscardTile(), DiscardTileProps, TileBack(), TileFace(), TileFacePro
 Cohesion: 0.14
 Nodes (23): AuthenticatedRoom(), useRoomCommands(), RETRY_DELAYS_MS, MockWebSocket, useRoomSocket(), UseRoomSocketOptions, apiBaseUrl, ApiError (+15 more)
 
-### Community 32 - "worker_runtime.py"
-Cohesion: 0.08
-Nodes (15): _json(), _MutableTestClock, Any, Test-only Python Worker exports for Durable Object storage acceptance tests.…, Reconstruct a pending window, then run the real alarm at N-1/N., Make one existing grace deadline due, then run the real alarm path., Run production batch reconciliation after test-controlled eviction., Real time by default, with explicit boundary control for one test RPC. (+7 more)
+### Community 32 - "TestGameRoom"
+Cohesion: 0.09
+Nodes (13): _json(), _MutableTestClock, Any, Reconstruct a pending window, then run the real alarm at N-1/N., Make one existing grace deadline due, then run the real alarm path., Run production batch reconciliation after test-controlled eviction., Real time by default, with explicit boundary control for one test RPC., Make the host the dealer and every automated decision reproducible. (+5 more)
 
-### Community 33 - "test_game_domain.py"
-Cohesion: 0.08
-Nodes (58): Chow, Continue, DeclareWin, Draw, Kong, KongKind, parse_domain_action_json(), Pass (+50 more)
+### Community 33 - "game/__init__.py"
+Cohesion: 0.10
+Nodes (55): Chow, Continue, DeclareWin, Discard, Draw, FinishHand, Kong, KongKind (+47 more)
 
 ### Community 34 - "durable_room.py"
 Cohesion: 0.21
 Nodes (22): WorkerResponse, Cloudflare Durable Object adapter for one authoritative room., _room_view_frame(), Stable Cloudflare Worker and Durable Object export facade., canonical_data(), canonical_json(), method_text(), parse_bearer() (+14 more)
 
-### Community 35 - "SeatId"
-Cohesion: 0.15
-Nodes (22): _collect_held_tiles(), ConnectionId, DiscardState, DomainId, HandId, HandState, PhysicalTile, Canonical immutable room, match, hand, and tile state. (+14 more)
+### Community 35 - "model.py"
+Cohesion: 0.13
+Nodes (21): _collect_held_tiles(), ConnectionId, DiscardState, DomainId, FanAward, HandId, HandState, Canonical immutable room, match, hand, and tile state. (+13 more)
 
-### Community 36 - "RoomState"
+### Community 36 - "RoomGameplay"
 Cohesion: 0.16
-Nodes (12): ObservationBuilder, Protocol, RoomState, _CataloguedGameplayAction, _project_gameplay_event(), DomainAction, DomainEvent, Consume room-owned effects without exposing an intermediate state. (+4 more)
+Nodes (9): _CataloguedGameplayAction, _project_gameplay_event(), DomainAction, DomainEvent, Consume room-owned effects without exposing an intermediate state., Gameplay-side use cases layered on a :class:`RoomKernel`., Idempotently resolve the active window at its exact deadline., RoomGameplay (+1 more)
 
 ### Community 37 - "test_room_lobby.py"
-Cohesion: 0.11
-Nodes (12): Compose command and presence use cases around one repository/cache owner., RoomOrchestrator, MultiplayerClaimTests, DeterministicCapabilities, DeterministicIds, MutableClock, DeterministicIds, base64 (+4 more)
+Cohesion: 0.13
+Nodes (11): Compose command and presence use cases around one repository/cache owner., RoomOrchestrator, MultiplayerClaimTests, DeterministicCapabilities, DeterministicIds, MutableClock, base64, hashlib (+3 more)
 
 ### Community 38 - "handleManualEditActivity"
 Cohesion: 0.19
 Nodes (24): clearStoredManualApplyState(), fetchPendingCount(), handleManualEditActivity(), hidePendingApplyDock(), manualApplyLoadingText(), manualApplyStateKey(), manualEditEventForCurrentPage(), numberOrNull() (+16 more)
 
 ### Community 39 - "CorruptRoomStateError"
-Cohesion: 0.09
-Nodes (20): CorruptRoomStateError, Raised when canonical state and its indexed metadata disagree., A projected event after the repository assigns its public sequence., Canonical state together with the duplicated indexed metadata., RoomStateRecord, StoredAuditEvent, Reconstruct the room from ``room_state`` and no auxiliary table., Atomically authenticate an active token against canonical membership. (+12 more)
+Cohesion: 0.11
+Nodes (13): CorruptRoomStateError, Raised when canonical state and its indexed metadata disagree., A projected event after the repository assigns its public sequence., StoredAuditEvent, Reconstruct the room from ``room_state`` and no auxiliary table., Atomically authenticate an active token against canonical membership., Return disconnected state for active players and generations only., Delete expired and consumed ticket rows without advancing revision. (+5 more)
 
 ### Community 40 - "session.ts"
 Cohesion: 0.18
 Nodes (24): useInviteCapability(), UseInviteCapabilityOptions, browserStorage(), clearRoomSession(), InviteTokenRemoval, listStoredRooms(), loadRoomSession(), parsePersistedSession() (+16 more)
 
-### Community 41 - "test_game_setup.py"
-Cohesion: 0.08
-Nodes (65): Discard, FinishHand, concealed_kongs(), AutomatedDecisionRequested, ClaimWindowRequested, MatchCompletionRequested, model_validator, Ask room orchestration to finalize a clock-free completed preview. (+57 more)
+### Community 41 - "RoomState"
+Cohesion: 0.10
+Nodes (52): concealed_kongs(), _complete_tie(), _discard_window_id(), finalize_completed_preview(), _first_hand_id(), GameEngine, _GameSetup, IllegalGameActionError (+44 more)
 
 ### Community 42 - "RoomKernel"
-Cohesion: 0.12
+Cohesion: 0.13
 Nodes (5): capability_hash(), CommandResult, Sample the injected clock once for a complete incoming operation., Own the mutable repository cache and atomic commit boundary., RoomKernel
 
 ### Community 43 - "worker_entry.py"
@@ -375,8 +375,8 @@ Cohesion: 0.16
 Nodes (13): Any, BaseModel, _read_environment_value(), Settings, create_supabase_client(), Create the shared client when both public Supabase values are configured., Default, Any (+5 more)
 
 ### Community 44 - "PlayerPresenceRecord"
-Cohesion: 0.10
-Nodes (18): PlayerPresenceRecord, ProjectedAuditEvent, An allow-listed, secret-free event ready for public audit storage., Durable disconnected state for one active authentication generation., A hashed, single-use WebSocket ticket projection., Hashed, rotatable room invite capability; raw values never persist., RoomCredentialRecord, SocketTicketRecord (+10 more)
+Cohesion: 0.12
+Nodes (16): PlayerPresenceRecord, ProcessedCommandRecord, ProjectedAuditEvent, An allow-listed, secret-free event ready for public audit storage., Durable disconnected state for one active authentication generation., A durable idempotency result scoped to one room-local player., A hashed, single-use WebSocket ticket projection., Hashed, rotatable room invite capability; raw values never persist. (+8 more)
 
 ### Community 45 - "resolveLiveInjectionAnchor"
 Cohesion: 0.16
@@ -386,9 +386,9 @@ Nodes (19): buildSvelteExpressionTextMap(), buildSveltePropValuesFromLiveElement
 Cohesion: 0.15
 Nodes (9): ConfigRequest, EnvironmentCORSMiddleware, Any, Resolve the one allowed frontend origin from the Worker environment., Prevent all room responses, including errors, from being cached., Authenticate protected room routes before FastAPI parses their bodies., RoomBearerMiddleware, RoomNoStoreMiddleware (+1 more)
 
-### Community 47 - "GameConfig"
-Cohesion: 0.07
-Nodes (15): GameConfig, model_validator, Normalized settings reserved for future Singapore game features., Validate and return the immutable normalized configuration., GameEngine, DomainAction, Any, GameRules (+7 more)
+### Community 47 - "build_public_room_view"
+Cohesion: 0.18
+Nodes (10): ProjectionBuilder, build_player_observation(), Build an authenticated human observation through the seat-scoped core., build_public_room_view(), OpaqueActionDescriptor, PublicRoomView, model_validator, Build a UI view without accepting or serializing domain action objects. (+2 more)
 
 ### Community 48 - "compilerOptions"
 Cohesion: 0.11
@@ -445,10 +445,6 @@ Nodes (10): AST only updates, CLAUDE.md integration, Graphify project integratio
 ### Community 61 - "Visualize direction comps"
 Cohesion: 0.33
 Nodes (6): Approved comp, PRODUCT.md and DESIGN.md, Raster plates, Semantic UI controls, Three compositional options, Visualize direction comps
-
-### Community 62 - "PlayerId"
-Cohesion: 0.15
-Nodes (19): PlayerId, _action_id(), catalog_lobby_actions(), resolve_lobby_action(), create_lobby_room(), CataloguedLobbyAction, LobbyAction, LobbyActionKind (+11 more)
 
 ### Community 63 - "Q: How does RoomState connect gameplay, privacy, persistence, and recovery?"
 Cohesion: 0.40
@@ -519,8 +515,8 @@ Cohesion: 0.40
 Nodes (4): Keep rejected preflights on the same redacted error contract., SafeCORSMiddleware, CORSMiddleware, Headers
 
 ### Community 81 - "RoomServiceError"
-Cohesion: 0.13
-Nodes (14): lobby_service_error(), parse_complete_config(), GameConfig, PublicRoomView, Authenticate for transport preflight without projecting a room view., Project after the caller has already advanced and sampled time., Command-side use cases layered on a :class:`RoomKernel`., RoomCommands (+6 more)
+Cohesion: 0.28
+Nodes (5): PublicRoomView, Project after the caller has already advanced and sampled time., RuntimeError, Base for every expected, client-safe room-service rejection., RoomServiceError
 
 ### Community 82 - "worker-probe.mjs"
 Cohesion: 0.70
@@ -550,9 +546,9 @@ Nodes (4): Graph first codebase navigation, Post edit graph update, Project grap
 Cohesion: 0.21
 Nodes (12): Canonical room_state snapshot, FastAPI Python Worker, Five minute lobby disconnect removal, GAME_ROOM Durable Object, Hibernating WebSockets, Invitation fragment capability, localStorage room credentials, Milestone 3 implementation (+4 more)
 
-### Community 89 - "standard_seats"
-Cohesion: 0.15
-Nodes (9): Return the four stable empty table slots used by new rooms., standard_seats(), canonicalize_room_snapshot(), deserialize_room_state(), Canonical room snapshot encoding helpers., BrandedIdentityTests, SnapshotAndEngineTests, room_with() (+1 more)
+### Community 89 - "AllBonusChainRandomSource"
+Cohesion: 0.10
+Nodes (11): AllBonusChainRandomSource, DealerTwoInitialBonusRandomSource, FinalLiveBonusRandomSource, IdentityRandomSource, InitialBonusRandomSource, T, Deal one raw bonus, then provide a regular opposite-end replacement., Put one bonus at the final live position and the other bonuses in reserve. (+3 more)
 
 ### Community 90 - "White dragon tile"
 Cohesion: 0.50
@@ -679,8 +675,8 @@ Cohesion: 0.67
 Nodes (3): Blue West character, Rounded pale tile with beveled border, West wind tile
 
 ### Community 121 - ".get_player"
-Cohesion: 0.18
-Nodes (6): Persist disconnected state for an active authentication generation. The…, Clear durable disconnected state for an active socket identity., Atomically clear disconnected state for active socket identities., Freeze disconnected seats, retaining their disconnected projection., update(), update()
+Cohesion: 0.15
+Nodes (7): Persist disconnected state for an active authentication generation. The…, Clear durable disconnected state for an active socket identity., Atomically clear disconnected state for active socket identities., Freeze disconnected seats, retaining their disconnected projection., update(), update(), update()
 
 ### Community 122 - "ZiMo private Singapore Mahjong"
 Cohesion: 0.20
@@ -694,28 +690,20 @@ Nodes (7): is_server_ready(), main(), Start one or more servers, wait for them t
 Cohesion: 0.40
 Nodes (5): Network idle wait, Python Playwright, Rendered DOM reconnaissance, Web Application Testing, CPython Pyodide and workerd testing
 
-### Community 131 - ".consume_socket_ticket"
-Cohesion: 0.33
-Nodes (3): Atomically consume an unexpired ticket for an active auth generation., Delete expired and consumed ticket rows without advancing revision., consume()
-
-### Community 132 - "Clock"
-Cohesion: 0.50
-Nodes (3): Clock, Protocol, Return Unix time in whole milliseconds.
-
 ## Knowledge Gaps
 - **337 isolated node(s):** `name`, `version`, `private`, `node`, `build` (+332 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 739 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **28 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 741 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **26 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `RoomState` connect `RoomState` to `state.py`, `model_validator`, `RoomId`, `game/__init__.py`, `persistence/__init__.py`, `test_persistence.py`, `kernel.py`, `test_game_claims.py`, `repository.py`, `rules_for_id`, `validation.py`, `test_game_domain.py`, `SeatId`, `CorruptRoomStateError`, `test_game_setup.py`, `RoomKernel`, `PlayerPresenceRecord`, `GameConfig`, `PlayerId`, `standard_seats`?**
-  _High betweenness centrality (0.039) - this node is a cross-community bridge._
-- **Why does `RoomRepository` connect `test_persistence.py` to `.get_player`, `.consume_socket_ticket`, `CorruptRoomStateError`, `persistence/__init__.py`, `PlayerPresenceRecord`, `repository.py`, `GameConfig`, `validation.py`?**
-  _High betweenness centrality (0.014) - this node is a cross-community bridge._
-- **Why does `RoomOrchestrator` connect `test_room_lobby.py` to `durable_room.py`, `RoomState`, `test_persistence.py`, `RoomKernel`, `kernel.py`, `RoomServiceError`, `rules_for_id`, `GameRoom`, `RoomGameplayTests`, `.create`?**
-  _High betweenness centrality (0.014) - this node is a cross-community bridge._
+- **Why does `RoomState` connect `RoomState` to `PlayerId`, `test_game_setup.py`, `test_game_invariant_matrix.py`, `GameConfig`, `GameModel`, `persistence/__init__.py`, `test_persistence.py`, `kernel.py`, `rules_for_id`, `repository.py`, `test_rules_registry.py`, `validation.py`, `game/__init__.py`, `model.py`, `RoomGameplay`, `CorruptRoomStateError`, `RoomKernel`, `PlayerPresenceRecord`, `build_public_room_view`?**
+  _High betweenness centrality (0.029) - this node is a cross-community bridge._
+- **Why does `RoomRepository` connect `test_persistence.py` to `.get_player`, `GameConfig`, `CorruptRoomStateError`, `persistence/__init__.py`, `PlayerPresenceRecord`, `repository.py`, `validation.py`?**
+  _High betweenness centrality (0.015) - this node is a cross-community bridge._
+- **Why does `Web Application Testing` connect `Web Application Testing` to `with_server.py`?**
+  _High betweenness centrality (0.012) - this node is a cross-community bridge._
 - **Are the 27 inferred relationships involving `RoomState` (e.g. with `choose_automated_action()` and `_complete_tie()`) actually correct?**
   _`RoomState` has 27 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 43 inferred relationships involving `SeatId` (e.g. with `Chow` and `Continue`) actually correct?**

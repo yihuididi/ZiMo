@@ -1,4 +1,4 @@
-"""Ruleset-versioned gameplay catalogues, deadlines, and bot continuation."""
+"""Gameplay catalogues, deadlines, and bot continuation."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ from dataclasses import dataclass
 if __package__.startswith("app."):
     from ..game import (
         MAX_AUTOMATED_CONTINUATIONS,
-        MILESTONE_3_RULESET_VERSION,
         AutomatedDecisionRequested,
         AutomatedSeatController,
         BonusExposed,
@@ -29,7 +28,6 @@ if __package__.startswith("app."):
         HandOutcome,
         HandSetupCompleted,
         MatchCompletionRequested,
-        MilestoneThreeEngine,
         OpaqueActionDescriptor,
         PendingDeadline,
         PlayerId,
@@ -38,14 +36,13 @@ if __package__.startswith("app."):
         TileDiscarded,
         TransitionResult,
         build_seat_observation,
-        capabilities_for_ruleset_version,
+        rules_for_id,
         finalize_completed_preview,
     )
     from ..persistence import GameplayAuditPayload, ProjectedAuditEvent
 else:  # pragma: no cover - Python Workers load modules from the app directory.
     from game import (
         MAX_AUTOMATED_CONTINUATIONS,
-        MILESTONE_3_RULESET_VERSION,
         AutomatedDecisionRequested,
         AutomatedSeatController,
         BonusExposed,
@@ -66,7 +63,6 @@ else:  # pragma: no cover - Python Workers load modules from the app directory.
         HandOutcome,
         HandSetupCompleted,
         MatchCompletionRequested,
-        MilestoneThreeEngine,
         OpaqueActionDescriptor,
         PendingDeadline,
         PlayerId,
@@ -75,7 +71,7 @@ else:  # pragma: no cover - Python Workers load modules from the app directory.
         TileDiscarded,
         TransitionResult,
         build_seat_observation,
-        capabilities_for_ruleset_version,
+        rules_for_id,
         finalize_completed_preview,
     )
     from persistence import GameplayAuditPayload, ProjectedAuditEvent
@@ -112,10 +108,8 @@ class RoomGameplay:
         deadline = state.pending_deadline
         if deadline is None or now_ms < deadline.deadline_ms:
             return False
-        if str(state.ruleset_version) not in {MILESTONE_3_RULESET_VERSION, "0.3.0"}:
-            raise RuntimeError("a non-preview room retained a gameplay deadline")
 
-        result = self._game_engine.resolve_discard_window(state, deadline.window_id)
+        result = self._engine_for(state).resolve_discard_window(state, deadline.window_id)
         result = TransitionResult(
             state=self._validated_state_update(
                 result.state,
@@ -157,17 +151,15 @@ class RoomGameplay:
         return min(deadlines) if deadlines else None
 
     def _capabilities(self, state: RoomState) -> tuple[object, ...]:
-        return capabilities_for_ruleset_version(str(state.ruleset_version))
+        return rules_for_id(state.ruleset_id).capabilities
 
     def _catalog_gameplay_actions(
         self, state: RoomState, player_id: str
     ) -> tuple[_CataloguedGameplayAction, ...]:
-        if str(state.ruleset_version) not in {MILESTONE_3_RULESET_VERSION, "0.3.0"}:
-            return ()
         seat_id = self._external_seat_id(state, player_id)
         if seat_id is None:
             return ()
-        actions = self._game_engine.legal_actions(state, seat_id)
+        actions = self._engine_for(state).legal_actions(state, seat_id)
         return tuple(self._catalog_action(state, seat_id, action) for action in actions)
 
     def _resolve_gameplay_action(
@@ -194,7 +186,7 @@ class RoomGameplay:
         *,
         now_ms: int,
     ) -> tuple[RoomState, tuple[DomainEvent, ...]]:
-        result = self._game_engine.transition(state, action)
+        result = self._engine_for(state).transition(state, action)
         next_state, events = self._pump_gameplay(result, now_ms=now_ms)
         return (
             self._finalize_origin_state(
@@ -211,15 +203,11 @@ class RoomGameplay:
         *,
         now_ms: int,
     ) -> tuple[RoomState, tuple[DomainEvent, ...]]:
-        if str(state.ruleset_version) not in {MILESTONE_3_RULESET_VERSION, "0.3.0"}:
-            return state, ()
-        result = self._game_engine.setup_match(state)
+        result = self._engine_for(state).setup_match(state)
         next_state, events = self._pump_gameplay(result, now_ms=now_ms)
         # Lobby start already assigned the one revision for this command.
         hand = next_state.match.current_hand
-        if next_state.ruleset_version == "0.3.0" and isinstance(
-            hand.phase, DiscardClaimsPhase
-        ):
+        if isinstance(hand.phase, DiscardClaimsPhase):
             phase = hand.phase.model_copy(update={"opening_revision": state.revision})
             hand = hand.model_copy(update={"phase": phase})
             next_state = self._validated_state_update(
@@ -283,7 +271,7 @@ class RoomGameplay:
                     seat = next(s for s in state.seats if s.seat_id == seat_id)
                     if isinstance(seat.controller, AutomatedSeatController):
                         chosen = self._choose_automated_action(state, seat_id)
-                        response = self._game_engine.transition(state, chosen)
+                        response = self._engine_for(state).transition(state, chosen)
                         state = response.state
                         events.extend(response.domain_events)
                 effects = ()
@@ -302,7 +290,7 @@ class RoomGameplay:
             automated_continuations += 1
             before = state.canonical_json()
             action = self._choose_automated_action(state, effect.seat_id)
-            result = self._game_engine.transition(state, action)
+            result = self._engine_for(state).transition(state, action)
             if result.state.canonical_json() == before:
                 raise RuntimeError("automated gameplay transition made no progress")
             state = result.state
@@ -320,7 +308,7 @@ class RoomGameplay:
         )
         if seat is None or not isinstance(seat.controller, AutomatedSeatController):
             raise RuntimeError("automated decision references a non-automated seat")
-        legal_actions = self._game_engine.legal_actions(state, seat_id)
+        legal_actions = self._engine_for(state).legal_actions(state, seat_id)
         observation = build_seat_observation(
             state,
             seat_id,
@@ -339,8 +327,7 @@ class RoomGameplay:
     ) -> bool:
         hand = state.match.current_hand if state.match else None
         if (
-            state.ruleset_version != "0.3.0"
-            or hand is None
+            hand is None
             or not isinstance(hand.phase, DiscardClaimsPhase)
         ):
             return False
@@ -452,8 +439,7 @@ class RoomGameplay:
                 "action": action.canonical_data(),
                 "revision": (
                     state.match.current_hand.phase.opening_revision
-                    if state.ruleset_version == "0.3.0"
-                    and isinstance(state.match.current_hand.phase, DiscardClaimsPhase)
+                    if isinstance(state.match.current_hand.phase, DiscardClaimsPhase)
                     else state.revision
                 ),
                 "roomId": str(state.room_id),

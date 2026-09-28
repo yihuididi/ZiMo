@@ -1,4 +1,4 @@
-"""Clock-free claims/melds preview; room orchestration owns deadlines and bots."""
+"""Clock-free Singapore gameplay; room orchestration owns deadlines and bots."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import Any, TypeVar
 
 from .actions import Discard, DomainAction, FinishHand, Kong, Pong
 from .base import GameModel
-from .capabilities import MILESTONE_4_CAPABILITIES
+from .capabilities import ROOM_CAPABILITIES
 from .claims import claim_actions, concealed_kongs, winning_claim
 from .effects import (
     AutomatedDecisionRequested,
@@ -14,7 +14,7 @@ from .effects import (
     MatchCompletionRequested,
 )
 from .engine import (
-    MilestoneThreeEngine,
+    _GameSetup,
     TransitionResult,
     IllegalGameActionError,
     InvalidGameStateError,
@@ -26,7 +26,7 @@ from .engine import (
     _replace_player_hand,
     _replacement_chain,
     _room_with_hand,
-    _validate_preview_result,
+    _validate_tie_result,
 )
 from .events import (
     BonusExposed,
@@ -59,7 +59,6 @@ from .model import (
     WindowId,
 )
 from .tiles import is_bonus_tile, sort_playable_tiles
-from .runtime import RandomSource
 
 Model = TypeVar("Model", bound=GameModel)
 
@@ -72,15 +71,15 @@ def _seats(state: RoomState) -> tuple[SeatId, ...]:
     return tuple(s.seat_id for s in sorted(state.seats, key=lambda s: s.slot))
 
 
-class MilestoneFourEngine(MilestoneThreeEngine):
-    capabilities = MILESTONE_4_CAPABILITIES
+class SingaporeGameEngine(_GameSetup):
+    capabilities = ROOM_CAPABILITIES
 
     def _require(self, state: RoomState) -> None:
-        if state.ruleset_version != "0.3.0":
-            raise InvalidGameStateError("room is not pinned to milestone four")
+        if state.ruleset_id != "singapore":
+            raise InvalidGameStateError("room does not use Singapore rules")
 
     def _validate(self, state: RoomState) -> None:
-        validate_milestone_four_room(state)
+        validate_room(state)
 
     def legal_actions(
         self, state: RoomState, seat_id: SeatId
@@ -427,11 +426,11 @@ class MilestoneFourEngine(MilestoneThreeEngine):
         )
 
 
-def validate_milestone_four_room(
+def validate_room(
     state: RoomState, *, require_deadline: bool = False
 ) -> None:
-    if state.ruleset_version != "0.3.0" or state.state_schema_version != 4:
-        raise InvalidGameStateError("milestone four version mismatch")
+    if state.ruleset_id != "singapore":
+        raise InvalidGameStateError("room does not use Singapore rules")
     hand = state.match.current_hand if state.match else None
     if hand is None:
         if (
@@ -453,7 +452,7 @@ def validate_milestone_four_room(
             CompletePhase,
         ),
     ):
-        raise InvalidGameStateError("unsupported milestone four phase")
+        raise InvalidGameStateError("unsupported game phase")
     if require_deadline and isinstance(
         hand.phase, (AwaitingDrawPhase, KongReplacementPhase)
     ):
@@ -633,7 +632,7 @@ def validate_milestone_four_room(
     ):
         raise InvalidGameStateError("final decision requires a legal Kong")
     if hand.result:
-        _validate_preview_result(hand.result)
+        _validate_tie_result(hand.result)
         if require_deadline and state.match.status is not MatchStatus.FINISHED:
             raise InvalidGameStateError("completed hand must be finalized")
     if state.match.status is MatchStatus.FINISHED:
@@ -646,32 +645,3 @@ def validate_milestone_four_room(
             or state.match.result.final_balances != state.match.balances
         ):
             raise InvalidGameStateError("invalid finished preview")
-
-
-class VersionedPreviewEngine:
-    """Dispatch pinned preview versions without changing legacy engine semantics."""
-
-    capabilities = MILESTONE_4_CAPABILITIES
-
-    def __init__(self, rng: RandomSource | None = None) -> None:
-        self.legacy = MilestoneThreeEngine(rng)
-        self.current = MilestoneFourEngine(rng)
-
-    def _engine(self, state: RoomState) -> MilestoneThreeEngine:
-        return self.current if state.ruleset_version == "0.3.0" else self.legacy
-
-    def setup_match(self, state: RoomState) -> TransitionResult:
-        return self._engine(state).setup_match(state)
-
-    def legal_actions(
-        self, state: RoomState, seat_id: SeatId
-    ) -> tuple[DomainAction, ...]:
-        return self._engine(state).legal_actions(state, seat_id)
-
-    def transition(self, state: RoomState, action: DomainAction) -> TransitionResult:
-        return self._engine(state).transition(state, action)
-
-    def resolve_discard_window(
-        self, state: RoomState, window_id: WindowId
-    ) -> TransitionResult:
-        return self._engine(state).resolve_discard_window(state, window_id)
