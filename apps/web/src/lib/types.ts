@@ -15,7 +15,8 @@ export type RoomCapability =
   | "drawDiscard"
   | "bonusTiles"
   | "discardWindow"
-  | "chow" | "pong" | "kong3" | "kong4";
+  | "chow" | "pong" | "kong1" | "kong3" | "kong4"
+  | "game" | "fanBreakdown" | "kongRobbery";
 
 export type TileRank = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 export type BonusNumber = 1 | 2 | 3 | 4;
@@ -50,7 +51,7 @@ export type MeldKind = "CHOW" | "PONG" | "KONG";
 export type ClaimKind = MeldKind | "WIN" | "PASS";
 
 export interface PublicExposedMeldView {
-  kongKind?: "KONG_3" | "KONG_4" | null;
+  kongKind?: "KONG_1" | "KONG_3" | "KONG_4" | null;
   visibility: "exposed";
   kind: MeldKind;
   tiles: PublicTileView[];
@@ -118,6 +119,7 @@ export interface HandResult {
   providerSeatId: string | null;
   winSource: "SELF_DRAW" | "DISCARD" | "ROBBED_KONG" | null;
   fan: number;
+  cappedFan: number;
   fanAwards: FanAward[];
   payments: Payment[];
   reason: string | null;
@@ -229,6 +231,8 @@ export interface PublicGameView {
 
 export interface PublicRoomView {
   apiVersion: "2";
+  rulesetVersion: "0.4.0";
+  stateSchemaVersion: 5;
   roomId: string;
   revision: number;
   presenceVersion: number;

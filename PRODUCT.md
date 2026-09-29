@@ -12,7 +12,7 @@ The primary audience is friends who already know Singapore Mahjong, confirmed by
 
 ## Product Purpose
 
-ZiMo provides a private Singapore Mahjong table in a web browser where friends can join a room and play alongside bots. The current implementation is a one-hand claims/melds preview, not a complete Mahjong game.
+ZiMo provides a private Singapore Mahjong table in a web browser where friends can join a room and play alongside bots. The current implementation plays one complete hand with winning and fan evaluation.
 
 ## Operating Context
 
@@ -27,8 +27,8 @@ The following describes the current implementation documented in README.md, rath
 - Room and game state are controlled by the server and updated in real time.
 - Draws and bonus-tile replacements happen automatically; the player chooses a discard.
 - Each discard opens a three-second resolution window.
-- Chow, Pong, Kong-3, Kong-4, and Pass are available in new rooms. Claim choices are final and resolve after the full three-second window. Kong-4 faces are public.
-- Game, Kong-1, scoring, payments, settings, and additional hands remain unavailable. Do not present them as implemented.
+- Chow, Pong, Kong-1/3/4, Game, and Pass are available in new rooms. Claim choices are final and resolve after the full three-second window. Kong-4 faces are public, and Kong-1 can be robbed for Game.
+- The server evaluates standard and special wins and shows the winner's fan breakdown. Payments, editable settings, and additional hands remain unavailable.
 
 Open decisions: relative priority of convenient private play versus rules completeness and familiar table interactions; future feature scope; product-specific accessibility requirements; and any competitive positioning or success metrics.
 
@@ -38,7 +38,7 @@ The existing product name is ZiMo Mahjong. The owner explicitly selected the til
 
 ## Evidence on Hand
 
-- `README.md` records the current preview scope, session behavior, and development setup.
+- `README.md` records the current one-hand scope, session behavior, and development setup.
 - `apps/web/src/routes/HomePage.tsx` implements room creation, invitation entry, and saved-room access.
 - `apps/web/src/features/room/lobby/` and `apps/web/src/features/room/table/` contain the existing lobby and table interfaces.
 - `apps/web/public/mahjong_tiles/` contains the selected tile artwork.

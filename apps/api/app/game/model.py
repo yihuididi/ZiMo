@@ -246,7 +246,7 @@ class SeatState(GameModel):
 
 
 class MeldState(GameModel):
-    kong_kind: Literal["KONG_3", "KONG_4"] | None = None
+    kong_kind: Literal["KONG_1", "KONG_3", "KONG_4"] | None = None
     kind: MeldKind
     tiles: tuple[PhysicalTile, ...]
     claimed_from_seat_id: SeatId | None = None
@@ -330,7 +330,7 @@ class Payment(GameModel):
 
 class FanAward(GameModel):
     name: str = Field(min_length=1, max_length=128)
-    fan: int = Field(gt=0)
+    fan: int = Field(ge=0)
 
 
 class HandResult(GameModel):
@@ -339,12 +339,15 @@ class HandResult(GameModel):
     provider_seat_id: SeatId | None = None
     win_source: WinSource | None = None
     fan: int = Field(default=0, ge=0)
+    capped_fan: int = Field(default=0, ge=0)
     fan_awards: tuple[FanAward, ...] = ()
     payments: tuple[Payment, ...] = ()
     reason: str | None = Field(default=None, min_length=1, max_length=256)
 
     @model_validator(mode="after")
     def validate_outcome(self) -> "HandResult":
+        if self.capped_fan != min(self.fan, 5):
+            raise ValueError("capped fan must use the fixed five-fan limit")
         if self.outcome is HandOutcome.WIN:
             if self.winner_seat_id is None or self.win_source is None:
                 raise ValueError("a winning result requires a winner and win source")
@@ -405,9 +408,11 @@ class KongReplacementPhase(GameModel):
 
 
 class KongRobberyPhase(GameModel):
+    opening_revision: int | None = Field(default=None, ge=0)
     type: Literal["kongRobbery"] = "kongRobbery"
     window_id: WindowId = Field(min_length=1)
     declaring_seat_id: SeatId = Field(min_length=1)
+    tile_id: TileId = Field(min_length=1)
     eligible_seat_ids: tuple[SeatId, ...] = ()
 
 
@@ -430,7 +435,9 @@ HandPhase = Annotated[
 
 class PlayerHand(GameModel):
     passed_pong_faces: tuple[TileFace, ...] = ()
+    passed_game_faces: tuple[TileFace, ...] = ()
     last_discard_face: TileFace | None = None
+    last_draw_was_replacement: bool = False
     seat_id: SeatId = Field(min_length=1)
     concealed_tiles: tuple[PhysicalTile, ...] = ()
     drawn_tile: PhysicalTile | None = None
@@ -469,7 +476,7 @@ class WallState(GameModel):
 
 
 class PendingDeadline(GameModel):
-    """Canonical room-owned deadline for the active discard window."""
+    """Canonical room-owned deadline for the active claim window."""
 
     window_id: WindowId = Field(min_length=1)
     deadline_ms: int = Field(ge=0)
@@ -676,7 +683,9 @@ def _validate_claimed_meld_provenance(
                     "a ledger discard cannot provide more than one claimed meld"
                 )
             if (
-                discard.claim_kind is not meld_kind_to_claim_kind[meld.kind]
+                discard.claim_kind is not (
+                    ClaimKind.PONG if meld.kong_kind == "KONG_1" else meld_kind_to_claim_kind[meld.kind]
+                )
                 or discard.claimed_by_seat_id != player_hand.seat_id
                 or discard.discarded_by_seat_id != meld.claimed_from_seat_id
                 or discard.tile not in meld.tiles
@@ -816,6 +825,8 @@ class MatchState(GameModel):
 class RoomState(GameModel):
     room_id: RoomId = Field(min_length=1)
     ruleset_id: str = Field(default="singapore", min_length=1)
+    ruleset_version: Literal["0.4.0"] = "0.4.0"
+    state_schema_version: Literal[5] = 5
     revision: int = Field(default=0, ge=0)
     config: GameConfig = Field(default_factory=GameConfig)
     status: RoomStatus = RoomStatus.CREATED
@@ -831,7 +842,7 @@ class RoomState(GameModel):
         # Recheck the configuration gate at the persistence boundary.
         if self.config != GameConfig():
             raise ValueError(
-                "Singapore preview cannot serialize unsupported game configuration"
+                "Singapore one-hand rules cannot serialize unsupported game configuration"
             )
         data = super().canonical_data()
         return data
@@ -843,7 +854,7 @@ class RoomState(GameModel):
         rules_for_id(self.ruleset_id)
         if self.config != GameConfig():
             raise ValueError(
-                "Singapore preview does not permit non-default game configuration"
+                "Singapore one-hand rules do not permit non-default game configuration"
             )
         if len(self.seats) != 4:
             raise ValueError("a room requires exactly four stable seat slots")
@@ -917,11 +928,11 @@ class RoomState(GameModel):
             hand = self.match.current_hand if self.match is not None else None
             if (
                 hand is None
-                or not isinstance(hand.phase, DiscardClaimsPhase)
+                or not isinstance(hand.phase, (DiscardClaimsPhase, KongRobberyPhase))
                 or hand.phase.window_id != self.pending_deadline.window_id
             ):
                 raise ValueError(
-                    "pending deadline must identify the active discard window"
+                    "pending deadline must identify the active claim window"
                 )
         if self.updated_at_ms < self.created_at_ms:
             raise ValueError("updated_at_ms cannot precede created_at_ms")

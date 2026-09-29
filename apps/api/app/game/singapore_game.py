@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-from typing import Any, TypeVar
+from typing import Any, Callable, TypeVar
 
-from .actions import Discard, DomainAction, FinishHand, Kong, Pong
+from .actions import DeclareWin, Discard, DomainAction, FinishHand, Kong, KongKind, Pass, Pong
 from .base import GameModel
 from .capabilities import ROOM_CAPABILITIES
 from .claims import claim_actions, concealed_kongs, winning_claim
@@ -28,6 +28,8 @@ from .events import (
     DomainEvent,
     HandCompleted,
     HandSetupCompleted,
+    FlowerTransferred,
+    WinDeclared,
     MeldDeclared,
     TileDiscarded,
     TileDrawn,
@@ -46,6 +48,7 @@ from .model import (
     HandResult,
     HandState,
     KongReplacementPhase,
+    KongRobberyPhase,
     MatchResult,
     MatchState,
     MatchStatus,
@@ -57,11 +60,14 @@ from .model import (
     RoomState,
     RoomStatus,
     SeatId,
+    TileFamily,
     WallState,
     Wind,
+    WinSource,
     WindowId,
 )
 from .runtime import RandomSource, SystemRandomSource
+from .scoring import WinEvaluation, evaluate_win
 from .tiles import canonical_physical_deck, is_bonus_tile, sort_playable_tiles
 
 
@@ -73,6 +79,7 @@ def _replacement_chain(
     events: list[DomainEvent],
     *,
     maximum_steps: int = MAX_AUTOMATED_CONTINUATIONS,
+    stop_on_flower: Callable[[list[PhysicalTile]], bool] | None = None,
 ) -> PhysicalTile | None:
     """Draw opposite-end replacements while preserving a 15-tile reserve."""
 
@@ -91,6 +98,8 @@ def _replacement_chain(
             return replacement
         bonus.append(replacement)
         events.append(BonusExposed(seat_id=seat_id, tile=replacement, initial=False))
+        if stop_on_flower is not None and stop_on_flower(bonus):
+            return None
     return None
 
 
@@ -112,7 +121,7 @@ def _complete_tie(state: RoomState, hand: HandState) -> RoomState:
     return _room_with_hand(state, complete, pending_deadline=None)
 
 
-def finalize_completed_preview(state: RoomState, *, completed_at_ms: int) -> RoomState:
+def finalize_completed_hand(state: RoomState, *, completed_at_ms: int) -> RoomState:
     """Finalize a clock-free completed hand using room-sampled time."""
 
     if (
@@ -132,7 +141,7 @@ def finalize_completed_preview(state: RoomState, *, completed_at_ms: int) -> Roo
         or not isinstance(state.match.current_hand.phase, CompletePhase)
         or state.match.current_hand.result is None
     ):
-        raise InvalidGameStateError("preview hand is not complete")
+        raise InvalidGameStateError("hand is not complete")
 
     hand = state.match.current_hand
     history = state.match.hand_history
@@ -174,6 +183,7 @@ def _validate_tie_result(result: HandResult) -> None:
         or result.provider_seat_id is not None
         or result.win_source is not None
         or result.fan != 0
+        or result.capped_fan != 0
         or result.fan_awards
         or result.payments
     ):
@@ -223,6 +233,11 @@ def _discard_window_id(hand_id: HandId, sequence: int) -> WindowId:
     digest = hashlib.sha256(
         f"zimo:discard-window:v1:{hand_id}:{sequence}".encode()
     ).hexdigest()[:32]
+    return WindowId(f"window_{digest}")
+
+
+def _robbery_window_id(hand_id: HandId, tile_id: str) -> WindowId:
+    digest = hashlib.sha256(f"zimo:robbery-window:v1:{hand_id}:{tile_id}".encode()).hexdigest()[:32]
     return WindowId(f"window_{digest}")
 
 
@@ -294,6 +309,117 @@ def _updated(model: Model, **updates: Any) -> Model:
 
 def _seats(state: RoomState) -> tuple[SeatId, ...]:
     return tuple(s.seat_id for s in sorted(state.seats, key=lambda s: s.slot))
+
+
+def _own_wind(state: RoomState, seat_id: SeatId) -> Wind:
+    seats = _seats(state)
+    dealer = state.match.dealer_seat_id
+    return (Wind.EAST, Wind.SOUTH, Wind.WEST, Wind.NORTH)[
+        (seats.index(seat_id) - seats.index(dealer)) % 4
+    ]
+
+
+def _win_evaluation(
+    state: RoomState, seat_id: SeatId, *, tile: PhysicalTile | None,
+    source: WinSource, automatic: str | None = None,
+) -> WinEvaluation | None:
+    hand = state.match.current_hand
+    return evaluate_win(
+        hand, _player_hand(hand, seat_id),
+        winning_tile=None if tile is None else tile.face,
+        source=source, prevailing_wind=state.match.prevailing_wind,
+        own_wind=_own_wind(state, seat_id), automatic=automatic,
+    )
+
+
+def _honor_completion(
+    state: RoomState, seat_id: SeatId, *, source: WinSource,
+    provider: SeatId | None = None,
+) -> TransitionResult | None:
+    player = _player_hand(state.match.current_hand, seat_id)
+    sets = {
+        (meld.tiles[0].face.family, meld.tiles[0].face.value)
+        for meld in player.melds if meld.kind in {MeldKind.PONG, MeldKind.KONG}
+    }
+    automatic = (
+        "ALL_WINDS" if all((TileFamily.WIND, value) in sets for value in ("EAST", "SOUTH", "WEST", "NORTH"))
+        else "ALL_DRAGONS" if all((TileFamily.DRAGON, value) in sets for value in ("RED", "GREEN", "WHITE"))
+        else None
+    )
+    if automatic is None:
+        return None
+    evaluation = _win_evaluation(state, seat_id, tile=None, source=source, automatic=automatic)
+    return _complete_win(state, seat_id, evaluation, source=source, provider=provider)
+
+
+def _complete_win(
+    state: RoomState, seat_id: SeatId, evaluation: WinEvaluation,
+    *, source: WinSource, provider: SeatId | None = None,
+    hand: HandState | None = None,
+) -> TransitionResult:
+    current = state.match.current_hand if hand is None else hand
+    complete = _updated(
+        current, phase=CompletePhase(), pending_claims=(),
+        result=HandResult(
+            outcome=HandOutcome.WIN, winner_seat_id=seat_id,
+            provider_seat_id=provider, win_source=source,
+            fan=evaluation.fan, capped_fan=min(evaluation.fan, 5),
+            fan_awards=evaluation.awards, payments=(), reason=evaluation.pattern,
+        ),
+    )
+    changed = _room_with_hand(state, complete, pending_deadline=None)
+    return TransitionResult(
+        state=changed,
+        domain_events=(WinDeclared(seat_id=seat_id), HandCompleted(result=complete.result)),
+        effects=(MatchCompletionRequested(),),
+    )
+
+
+def _flower_completion(state: RoomState) -> TransitionResult | None:
+    hand = state.match.current_hand
+    by_seat = {player.seat_id: player for player in hand.player_hands}
+    flowers = {
+        seat: tuple(tile for tile in player.bonus_tiles if tile.face.family in {TileFamily.FLOWER, TileFamily.SEASON})
+        for seat, player in by_seat.items()
+    }
+    for seat_id, tiles in flowers.items():
+        if len(tiles) == 8:
+            evaluation = _win_evaluation(
+                state, seat_id, tile=None, source=WinSource.SELF_DRAW,
+                automatic="EIGHT_FLOWERS",
+            )
+            return _complete_win(state, seat_id, evaluation, source=WinSource.SELF_DRAW)
+        if len(tiles) == 7:
+            provider = next((other for other, held in flowers.items() if other != seat_id and held), None)
+            if provider is None:
+                continue
+            tile = flowers[provider][0]
+            holder = by_seat[provider]
+            recipient = by_seat[seat_id]
+            holder = _updated(holder, bonus_tiles=tuple(value for value in holder.bonus_tiles if value.tile_id != tile.tile_id))
+            recipient = _updated(recipient, bonus_tiles=(*recipient.bonus_tiles, tile))
+            changed_hand = _updated(
+                hand,
+                player_hands=tuple(
+                    holder if player.seat_id == provider else recipient if player.seat_id == seat_id else player
+                    for player in hand.player_hands
+                ),
+            )
+            changed = _room_with_hand(state, changed_hand, pending_deadline=None)
+            evaluation = _win_evaluation(
+                changed, seat_id, tile=None, source=WinSource.DISCARD,
+                automatic="SEVEN_FLOWERS",
+            )
+            completed = _complete_win(
+                changed, seat_id, evaluation, source=WinSource.DISCARD, provider=provider,
+            )
+            return _updated(
+                completed, domain_events=(
+                    FlowerTransferred(from_seat_id=provider, to_seat_id=seat_id, tile=tile),
+                    *completed.domain_events,
+                ),
+            )
+    return None
 
 
 class SingaporeGameEngine:
@@ -409,7 +535,7 @@ class SingaporeGameEngine:
             balances=state.match.balances,
         )
         setup_state = _rebuild_room(state, match=match, pending_deadline=None)
-        drawn = self._automatic_draw(setup_state, dealer_seat_id)
+        drawn = _flower_completion(setup_state) or self._automatic_draw(setup_state, dealer_seat_id)
         result = TransitionResult(
             state=drawn.state,
             domain_events=(*setup_events, *drawn.domain_events),
@@ -424,6 +550,36 @@ class SingaporeGameEngine:
 
     def _validate(self, state: RoomState) -> None:
         validate_room(state)
+
+    @staticmethod
+    def _claim_actions(state: RoomState, hand: HandState, seat_id: SeatId) -> tuple[DomainAction, ...]:
+        return claim_actions(
+            hand, seat_id, _seats(state),
+            prevailing_wind=state.match.prevailing_wind,
+            dealer_seat_id=state.match.dealer_seat_id,
+        )
+
+    @staticmethod
+    def _robbery_actions(state: RoomState, hand: HandState, seat_id: SeatId) -> tuple[DomainAction, ...]:
+        phase = hand.phase
+        if not isinstance(phase, KongRobberyPhase) or seat_id == phase.declaring_seat_id:
+            return ()
+        declaring = _player_hand(hand, phase.declaring_seat_id)
+        tile = next(
+            (tile for tile in (*declaring.concealed_tiles, *((declaring.drawn_tile,) if declaring.drawn_tile else ())) if tile.tile_id == phase.tile_id),
+            None,
+        )
+        if tile is None or not any(
+            meld.kind is MeldKind.PONG and meld.tiles[0].face == tile.face
+            for meld in declaring.melds
+        ):
+            raise InvalidGameStateError("invalid robbery tile")
+        player = _player_hand(hand, seat_id)
+        if tile.face in player.passed_game_faces or tile.face == player.last_discard_face:
+            return ()
+        if _win_evaluation(state, seat_id, tile=tile, source=WinSource.ROBBED_KONG) is None:
+            return ()
+        return (DeclareWin(seat_id=seat_id, window_id=phase.window_id), Pass(seat_id=seat_id, window_id=phase.window_id))
 
     def legal_actions(
         self, state: RoomState, seat_id: SeatId
@@ -443,7 +599,11 @@ class SingaporeGameEngine:
                 c.seat_id == seat_id for c in hand.pending_claims
             ):
                 return ()
-            return claim_actions(hand, seat_id, _seats(state))
+            return self._claim_actions(state, hand, seat_id)
+        if isinstance(phase, KongRobberyPhase):
+            if seat_id not in phase.eligible_seat_ids or any(c.seat_id == seat_id for c in hand.pending_claims):
+                return ()
+            return self._robbery_actions(state, hand, seat_id)
         if (
             not isinstance(phase, (AwaitingDiscardPhase, FinalTileDecisionPhase))
             or phase.seat_id != seat_id
@@ -451,10 +611,29 @@ class SingaporeGameEngine:
             return ()
         player = _player_hand(hand, seat_id)
         if isinstance(phase, FinalTileDecisionPhase):
-            return (*concealed_kongs(player), FinishHand(seat_id=seat_id))
+            win = (
+                _win_evaluation(state, seat_id, tile=None, source=WinSource.SELF_DRAW)
+                if player.drawn_tile is not None else None
+            )
+            return (
+                *((DeclareWin(seat_id=seat_id),) if win else ()),
+                *concealed_kongs(player), FinishHand(seat_id=seat_id),
+            )
         kongs = concealed_kongs(player) if player.drawn_tile else ()
+        added_kongs = tuple(
+            Kong(seat_id=seat_id, kind=KongKind.ADDED, tile_ids=(tile.tile_id,))
+            for meld in player.melds if meld.kind is MeldKind.PONG
+            for tile in (*player.concealed_tiles, *((player.drawn_tile,) if player.drawn_tile else ()))
+            if tile.face == meld.tiles[0].face
+        ) if player.drawn_tile else ()
+        win = (
+            _win_evaluation(state, seat_id, tile=None, source=WinSource.SELF_DRAW)
+            if player.drawn_tile is not None else None
+        )
         return (
+            *((DeclareWin(seat_id=seat_id),) if win else ()),
             *kongs,
+            *added_kongs,
             *(
                 Discard(seat_id=seat_id, tile_id=t.tile_id)
                 for t in (
@@ -474,6 +653,7 @@ class SingaporeGameEngine:
                 "chow": ClaimKind.CHOW,
                 "pong": ClaimKind.PONG,
                 "kong": ClaimKind.KONG,
+                "declareWin": ClaimKind.WIN,
                 "pass": ClaimKind.PASS,
             }[action.type]
             claim = PendingClaim(
@@ -493,9 +673,45 @@ class SingaporeGameEngine:
                     ),
                 ),
             )
+        elif isinstance(hand.phase, KongRobberyPhase):
+            kind = ClaimKind.WIN if isinstance(action, DeclareWin) else ClaimKind.PASS
+            claim = PendingClaim(window_id=hand.phase.window_id, seat_id=action.seat_id, kind=kind)
+            updated = _updated(hand, pending_claims=(*hand.pending_claims, claim))
+            result = TransitionResult(
+                state=_room_with_hand(state, updated, pending_deadline=state.pending_deadline),
+                domain_events=(ClaimSubmitted(window_id=claim.window_id, seat_id=claim.seat_id, kind=kind),),
+            )
+        elif isinstance(action, DeclareWin):
+            evaluation = _win_evaluation(state, action.seat_id, tile=None, source=WinSource.SELF_DRAW)
+            if evaluation is None:
+                raise IllegalGameActionError()
+            result = _complete_win(state, action.seat_id, evaluation, source=WinSource.SELF_DRAW)
         elif isinstance(action, FinishHand):
             result = self._finish(state, hand)
         elif isinstance(action, Kong):
+            if action.kind is KongKind.ADDED:
+                window = _robbery_window_id(hand.hand_id, str(action.tile_ids[0]))
+                phase = KongRobberyPhase(
+                    window_id=window, declaring_seat_id=action.seat_id,
+                    tile_id=action.tile_ids[0], opening_revision=state.revision + 1,
+                )
+                updated = _updated(hand, phase=phase, pending_claims=())
+                provisional = _room_with_hand(state, updated, pending_deadline=None)
+                eligible = tuple(
+                    seat for seat in _seats(state)
+                    if seat != action.seat_id and self._robbery_actions(provisional, updated, seat)
+                )
+                updated = _updated(updated, phase=_updated(phase, eligible_seat_ids=eligible))
+                result = TransitionResult(
+                    state=_room_with_hand(state, updated, pending_deadline=None),
+                    domain_events=(),
+                    effects=(ClaimWindowRequested(
+                        window_id=window, discard_sequence=len(hand.discards) + 1,
+                        eligible_seat_ids=eligible, duration_ms=3000,
+                    ),),
+                )
+                self._validate(result.state)
+                return result
             tiles = (
                 *player.concealed_tiles,
                 *((player.drawn_tile,) if player.drawn_tile else ()),
@@ -513,6 +729,7 @@ class SingaporeGameEngine:
                 drawn_tile=None,
                 melds=(*player.melds, meld),
                 passed_pong_faces=(),
+                passed_game_faces=(),
             )
             updated = _updated(
                 hand,
@@ -520,7 +737,8 @@ class SingaporeGameEngine:
                 phase=KongReplacementPhase(seat_id=action.seat_id),
             )
             changed = _room_with_hand(state, updated, pending_deadline=None)
-            continuation = self._draw(changed, action.seat_id, replacement=True)
+            completion = _honor_completion(changed, action.seat_id, source=WinSource.SELF_DRAW)
+            continuation = completion or self._draw(changed, action.seat_id, replacement=True)
             result = _updated(
                 continuation,
                 domain_events=(
@@ -541,6 +759,7 @@ class SingaporeGameEngine:
                 ),
                 drawn_tile=None,
                 last_discard_face=tile.face,
+                last_draw_was_replacement=False,
             )
             sequence = len(hand.discards) + 1
             window = _discard_window_id(hand.hand_id, sequence)
@@ -566,7 +785,7 @@ class SingaporeGameEngine:
             eligible = tuple(
                 seat
                 for seat in _seats(state)
-                if claim_actions(updated, seat, _seats(state))
+                if self._claim_actions(state, updated, seat)
             )
             updated = _updated(
                 updated, phase=_updated(phase, eligible_seat_ids=eligible)
@@ -597,6 +816,8 @@ class SingaporeGameEngine:
     ) -> TransitionResult:
         self._require(state)
         hand = state.match.current_hand if state.match else None
+        if hand is not None and isinstance(hand.phase, KongRobberyPhase):
+            return self._resolve_robbery_window(state, hand, window_id)
         if (
             hand is None
             or not isinstance(hand.phase, DiscardClaimsPhase)
@@ -609,7 +830,7 @@ class SingaporeGameEngine:
         claims = {c.seat_id: c for c in hand.pending_claims}
         players = []
         for player in hand.player_hands:
-            offered = claim_actions(hand, player.seat_id, seats)
+            offered = self._claim_actions(state, hand, player.seat_id)
             chosen = claims.get(player.seat_id)
             if any(isinstance(a, Pong) for a in offered) and (
                 chosen is None or chosen.kind not in {ClaimKind.PONG, ClaimKind.KONG}
@@ -617,6 +838,13 @@ class SingaporeGameEngine:
                 player = _updated(
                     player,
                     passed_pong_faces=(*player.passed_pong_faces, discard.tile.face),
+                )
+            if any(isinstance(a, DeclareWin) for a in offered) and (
+                chosen is None or chosen.kind is not ClaimKind.WIN
+            ):
+                player = _updated(
+                    player,
+                    passed_game_faces=(*player.passed_game_faces, discard.tile.face),
                 )
             players.append(player)
         resolution = DiscardWindowResolved(
@@ -637,6 +865,22 @@ class SingaporeGameEngine:
                 _room_with_hand(state, updated, pending_deadline=None), seat
             )
             result = _updated(result, domain_events=(resolution, *result.domain_events))
+        elif winner.kind is ClaimKind.WIN:
+            updated = _updated(
+                hand, pending_claims=(), player_hands=tuple(players),
+                discards=(*hand.discards[:-1], _updated(
+                    discard, claimed_by_seat_id=winner.seat_id, claim_kind=ClaimKind.WIN,
+                )),
+            )
+            changed = _room_with_hand(state, updated, pending_deadline=None)
+            evaluation = _win_evaluation(changed, winner.seat_id, tile=discard.tile, source=WinSource.DISCARD)
+            if evaluation is None:
+                raise InvalidGameStateError("resolved Game is no longer legal")
+            completion = _complete_win(
+                changed, winner.seat_id, evaluation, source=WinSource.DISCARD,
+                provider=discard.discarded_by_seat_id,
+            )
+            result = _updated(completion, domain_events=(resolution, *completion.domain_events))
         else:
             player = next(p for p in players if p.seat_id == winner.seat_id)
             meld = MeldState(
@@ -662,6 +906,7 @@ class SingaporeGameEngine:
                 ),
                 melds=(*player.melds, meld),
                 passed_pong_faces=(),
+                passed_game_faces=(),
             )
             phase = (
                 KongReplacementPhase(seat_id=winner.seat_id)
@@ -685,7 +930,11 @@ class SingaporeGameEngine:
                 ),
             )
             changed = _room_with_hand(state, updated, pending_deadline=None)
-            result = (
+            completion = _honor_completion(
+                changed, winner.seat_id, source=WinSource.DISCARD,
+                provider=discard.discarded_by_seat_id,
+            )
+            result = completion or (
                 self._draw(changed, winner.seat_id, replacement=True)
                 if winner.kind is ClaimKind.KONG
                 else self._await_turn(changed, winner.seat_id)
@@ -698,6 +947,71 @@ class SingaporeGameEngine:
                     *result.domain_events,
                 ),
             )
+        self._validate(result.state)
+        return result
+
+    def _resolve_robbery_window(
+        self, state: RoomState, hand: HandState, window_id: WindowId
+    ) -> TransitionResult:
+        phase = hand.phase
+        if not isinstance(phase, KongRobberyPhase) or phase.window_id != window_id:
+            raise IllegalGameActionError()
+        declaring = _player_hand(hand, phase.declaring_seat_id)
+        held = (*declaring.concealed_tiles, *((declaring.drawn_tile,) if declaring.drawn_tile else ()))
+        tile = next(value for value in held if value.tile_id == phase.tile_id)
+        claims = {claim.seat_id: claim for claim in hand.pending_claims}
+        winner = winning_claim(hand.pending_claims, _seats(state), phase.declaring_seat_id)
+        players = []
+        for player in hand.player_hands:
+            if player.seat_id in phase.eligible_seat_ids and (
+                player.seat_id not in claims
+                or claims[player.seat_id].kind is not ClaimKind.WIN
+            ):
+                player = _updated(player, passed_game_faces=(*player.passed_game_faces, tile.face))
+            players.append(player)
+        if winner is not None:
+            claimant = next(player for player in players if player.seat_id == winner.seat_id)
+            declaring = _updated(
+                declaring,
+                concealed_tiles=sort_playable_tiles(t for t in declaring.concealed_tiles if t.tile_id != tile.tile_id),
+                drawn_tile=None if declaring.drawn_tile == tile else declaring.drawn_tile,
+            )
+            claimant = _updated(claimant, drawn_tile=tile)
+            players = tuple(
+                claimant if player.seat_id == claimant.seat_id else declaring if player.seat_id == declaring.seat_id else player
+                for player in players
+            )
+            updated = _updated(hand, player_hands=players, pending_claims=())
+            changed = _room_with_hand(state, updated, pending_deadline=None)
+            evaluation = _win_evaluation(changed, winner.seat_id, tile=None, source=WinSource.ROBBED_KONG)
+            if evaluation is None:
+                raise InvalidGameStateError("robbery Game is no longer legal")
+            result = _complete_win(
+                changed, winner.seat_id, evaluation, source=WinSource.ROBBED_KONG,
+                provider=phase.declaring_seat_id,
+            )
+        else:
+            meld_index = next(
+                index for index, meld in enumerate(declaring.melds)
+                if meld.kind is MeldKind.PONG and meld.tiles[0].face == tile.face
+            )
+            old = declaring.melds[meld_index]
+            meld = _updated(old, kind=MeldKind.KONG, kong_kind="KONG_1", tiles=(*old.tiles, tile))
+            declaring = _updated(
+                declaring,
+                concealed_tiles=sort_playable_tiles(t for t in declaring.concealed_tiles if t.tile_id != tile.tile_id),
+                drawn_tile=None if declaring.drawn_tile == tile else declaring.drawn_tile,
+                melds=(*declaring.melds[:meld_index], meld, *declaring.melds[meld_index + 1:]),
+                passed_pong_faces=(), passed_game_faces=(),
+            )
+            updated = _updated(
+                hand, player_hands=tuple(declaring if p.seat_id == declaring.seat_id else p for p in players),
+                pending_claims=(), phase=KongReplacementPhase(seat_id=declaring.seat_id),
+            )
+            changed = _room_with_hand(state, updated, pending_deadline=None)
+            completion = _honor_completion(changed, declaring.seat_id, source=WinSource.SELF_DRAW)
+            continuation = completion or self._draw(changed, declaring.seat_id, replacement=True)
+            result = _updated(continuation, domain_events=(MeldDeclared(seat_id=declaring.seat_id, meld=meld), *continuation.domain_events))
         self._validate(result.state)
         return result
 
@@ -717,17 +1031,30 @@ class SingaporeGameEngine:
             list(player.bonus_tiles),
             [],
         )
+        other_has_seven = any(
+            sum(tile.face.family in {TileFamily.FLOWER, TileFamily.SEASON} for tile in value.bonus_tiles) == 7
+            for value in hand.player_hands if value.seat_id != seat_id
+        )
+        def flower_complete(held: list[PhysicalTile]) -> bool:
+            count = sum(tile.face.family in {TileFamily.FLOWER, TileFamily.SEASON} for tile in held)
+            return count == 8 or (other_has_seven and count > 0)
         if replacement:
-            tile = _replacement_chain(seat_id, live, reserve, bonus, events)
+            tile = _replacement_chain(seat_id, live, reserve, bonus, events, stop_on_flower=flower_complete)
         else:
             tile = live.pop(0)
             events.append(TileDrawn(seat_id=seat_id, tile=tile, replacement=False))
             if is_bonus_tile(tile):
                 bonus.append(tile)
                 events.append(BonusExposed(seat_id=seat_id, tile=tile, initial=False))
-                tile = _replacement_chain(seat_id, live, reserve, bonus, events)
+                tile = None if flower_complete(bonus) else _replacement_chain(
+                    seat_id, live, reserve, bonus, events, stop_on_flower=flower_complete,
+                )
         player = _updated(
-            player, drawn_tile=tile, bonus_tiles=tuple(bonus), passed_pong_faces=()
+            player, drawn_tile=tile, bonus_tiles=tuple(bonus),
+            passed_pong_faces=(), passed_game_faces=(),
+            last_draw_was_replacement=replacement or any(
+                isinstance(event, TileDrawn) and event.replacement for event in events
+            ),
         )
         final = not live or tile is None
         phase = (
@@ -742,9 +1069,17 @@ class SingaporeGameEngine:
             player_hands=_replace_player_hand(hand, player),
         )
         changed = _room_with_hand(state, updated, pending_deadline=None)
+        flower_win = _flower_completion(changed)
+        if flower_win is not None:
+            return _updated(flower_win, domain_events=(*events, *flower_win.domain_events))
         result = (
             self._finish(changed, updated)
-            if final and (tile is None or not concealed_kongs(player))
+            if final and (
+                tile is None or (
+                    not concealed_kongs(player)
+                    and (player.drawn_tile is None or _win_evaluation(changed, seat_id, tile=None, source=WinSource.SELF_DRAW) is None)
+                )
+            )
             else self._await_turn(changed, seat_id)
         )
         return _updated(result, domain_events=(*events, *result.domain_events))
@@ -792,6 +1127,7 @@ def validate_room(
             AwaitingDiscardPhase,
             DiscardClaimsPhase,
             KongReplacementPhase,
+            KongRobberyPhase,
             FinalTileDecisionPhase,
             CompletePhase,
         ),
@@ -812,7 +1148,7 @@ def validate_room(
     tiles = [
         *hand.wall.live_tiles,
         *hand.wall.reserve_tiles,
-        *(d.tile for d in hand.discards if d.claimed_by_seat_id is None),
+        *(d.tile for d in hand.discards if d.claimed_by_seat_id is None or d.claim_kind is ClaimKind.WIN),
     ]
     for player in hand.player_hands:
         tiles.extend(
@@ -831,9 +1167,7 @@ def validate_room(
             player.drawn_tile and is_bonus_tile(player.drawn_tile)
         ):
             raise InvalidGameStateError("invalid bonus placement")
-        if len(player.initial_tile_ids) != 13 or len(
-            set(player.passed_pong_faces)
-        ) != len(player.passed_pong_faces):
+        if len(player.initial_tile_ids) != 13 or len(set(player.passed_pong_faces)) != len(player.passed_pong_faces) or len(set(player.passed_game_faces)) != len(player.passed_game_faces):
             raise InvalidGameStateError("invalid initial provenance or passed faces")
         own_discards = [
             d for d in hand.discards if d.discarded_by_seat_id == player.seat_id
@@ -847,9 +1181,10 @@ def validate_room(
         if player.drawn_tile and (
             not isinstance(
                 hand.phase,
-                (AwaitingDiscardPhase, FinalTileDecisionPhase, CompletePhase),
+                (AwaitingDiscardPhase, FinalTileDecisionPhase, KongRobberyPhase, CompletePhase),
             )
             or (hasattr(hand.phase, "seat_id") and hand.phase.seat_id != player.seat_id)
+            or (isinstance(hand.phase, KongRobberyPhase) and hand.phase.declaring_seat_id != player.seat_id)
         ):
             raise InvalidGameStateError("draw buffer belongs only to the active seat")
         for meld in player.melds:
@@ -877,7 +1212,7 @@ def validate_room(
                 raise InvalidGameStateError("invalid matching meld")
             if meld.kind is MeldKind.KONG and (
                 meld.concealed
-                or meld.kong_kind != ("KONG_3" if meld.discard_sequence else "KONG_4")
+                or meld.kong_kind not in ({"KONG_1", "KONG_3"} if meld.discard_sequence else {"KONG_4"})
             ):
                 raise InvalidGameStateError("invalid Kong provenance")
         count = (
@@ -894,6 +1229,8 @@ def validate_room(
                     hand.phase, (AwaitingDiscardPhase, FinalTileDecisionPhase)
                 )
                 and hand.phase.seat_id == player.seat_id
+                or isinstance(hand.phase, KongRobberyPhase)
+                and hand.phase.declaring_seat_id == player.seat_id
                 else 13
             )
             if count != expected:
@@ -921,7 +1258,16 @@ def validate_room(
             for d in hand.discards
             if d.discarded_by_seat_id == player.seat_id
         )
-        if not set(player.initial_tile_ids).issubset(attributable):
+        allowed_transfer = (
+            isinstance(hand.phase, CompletePhase)
+            and hand.result is not None
+            and (
+                hand.result.win_source is WinSource.ROBBED_KONG
+                or hand.result.reason == "SEVEN_FLOWERS"
+            )
+            and player.seat_id == hand.result.provider_seat_id
+        )
+        if not allowed_transfer and not set(player.initial_tile_ids).issubset(attributable):
             raise InvalidGameStateError(
                 "initial tiles cannot change owner without a discard"
             )
@@ -946,37 +1292,73 @@ def validate_room(
         ):
             raise InvalidGameStateError("missing deadline or invalid opening revision")
         eligible = tuple(
-            seat for seat in _seats(state) if claim_actions(hand, seat, _seats(state))
+            seat for seat in _seats(state)
+            if claim_actions(
+                hand, seat, _seats(state),
+                prevailing_wind=state.match.prevailing_wind,
+                dealer_seat_id=state.match.dealer_seat_id,
+            )
         )
         if eligible != hand.phase.eligible_seat_ids:
             raise InvalidGameStateError("invalid eligible seats")
         for claim in hand.pending_claims:
-            legal = claim_actions(hand, claim.seat_id, _seats(state))
+            legal = claim_actions(
+                hand, claim.seat_id, _seats(state),
+                prevailing_wind=state.match.prevailing_wind,
+                dealer_seat_id=state.match.dealer_seat_id,
+            )
             if not any(
                 getattr(a, "tile_ids", ()) == claim.tile_ids
                 and {
                     "chow": ClaimKind.CHOW,
                     "pong": ClaimKind.PONG,
                     "kong": ClaimKind.KONG,
+                    "declareWin": ClaimKind.WIN,
                     "pass": ClaimKind.PASS,
                 }[a.type]
                 == claim.kind
                 for a in legal
             ):
                 raise InvalidGameStateError("invalid persisted claim")
+    elif isinstance(hand.phase, KongRobberyPhase):
+        phase = hand.phase
+        if phase.window_id != _robbery_window_id(hand.hand_id, str(phase.tile_id)) or phase.opening_revision is None:
+            raise InvalidGameStateError("invalid robbery window")
+        if require_deadline and (state.pending_deadline is None or phase.opening_revision > state.revision):
+            raise InvalidGameStateError("missing robbery deadline")
+        eligible = tuple(
+            seat for seat in _seats(state)
+            if SingaporeGameEngine._robbery_actions(state, hand, seat)
+        )
+        if eligible != phase.eligible_seat_ids:
+            raise InvalidGameStateError("invalid robbery claim seats")
+        if any(claim.kind not in {ClaimKind.WIN, ClaimKind.PASS} for claim in hand.pending_claims):
+            raise InvalidGameStateError("invalid robbery claim")
     elif state.pending_deadline is not None:
         raise InvalidGameStateError("deadline outside window")
-    if isinstance(hand.phase, (CompletePhase, FinalTileDecisionPhase)):
+    if isinstance(hand.phase, FinalTileDecisionPhase):
         if hand.wall.live_tiles:
             raise InvalidGameStateError("endgame requires exhausted live wall")
-    elif not hand.wall.live_tiles:
+    elif not isinstance(hand.phase, CompletePhase) and not hand.wall.live_tiles:
         raise InvalidGameStateError("active play needs live tiles")
     if isinstance(hand.phase, FinalTileDecisionPhase) and not concealed_kongs(
         _player_hand(hand, hand.phase.seat_id)
+    ) and (
+        _player_hand(hand, hand.phase.seat_id).drawn_tile is None
+        or _win_evaluation(state, hand.phase.seat_id, tile=None, source=WinSource.SELF_DRAW) is None
     ):
-        raise InvalidGameStateError("final decision requires a legal Kong")
+        raise InvalidGameStateError("final decision requires a legal Kong or Game")
     if hand.result:
-        _validate_tie_result(hand.result)
+        if hand.result.outcome is HandOutcome.TIE:
+            _validate_tie_result(hand.result)
+        elif (
+            hand.result.outcome is not HandOutcome.WIN
+            or hand.result.fan < 1
+            or hand.result.capped_fan != min(hand.result.fan, 5)
+            or sum(award.fan for award in hand.result.fan_awards) != hand.result.fan
+            or hand.result.payments
+        ):
+            raise InvalidGameStateError("invalid winning hand result")
         if require_deadline and state.match.status is not MatchStatus.FINISHED:
             raise InvalidGameStateError("completed hand must be finalized")
     if state.match.status is MatchStatus.FINISHED:
@@ -985,7 +1367,9 @@ def validate_room(
             or not hand.result
             or state.match.hand_history != (hand.result,)
             or state.match.result is None
-            or state.match.result.winning_seat_ids
+            or state.match.result.winning_seat_ids != (
+                () if hand.result.winner_seat_id is None else (hand.result.winner_seat_id,)
+            )
             or state.match.result.final_balances != state.match.balances
         ):
-            raise InvalidGameStateError("invalid finished preview")
+            raise InvalidGameStateError("invalid finished hand")

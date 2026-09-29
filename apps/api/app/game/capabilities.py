@@ -7,13 +7,13 @@ from typing import Literal, TypeAlias
 RoomCapability: TypeAlias = Literal[
     "multiplayerLobby", "roomEvents", "hibernatingWebSockets",
     "drawDiscard", "bonusTiles", "discardWindow", "chow", "pong",
-    "kong3", "kong4",
+    "kong1", "kong3", "kong4", "game", "fanBreakdown", "kongRobbery",
 ]
 
 ROOM_CAPABILITIES: tuple[RoomCapability, ...] = (
     "multiplayerLobby", "roomEvents", "hibernatingWebSockets",
     "drawDiscard", "bonusTiles", "discardWindow", "chow", "pong",
-    "kong3", "kong4",
+    "kong1", "kong3", "kong4", "game", "fanBreakdown", "kongRobbery",
 )
 
 __all__ = ["RoomCapability", "ROOM_CAPABILITIES"]

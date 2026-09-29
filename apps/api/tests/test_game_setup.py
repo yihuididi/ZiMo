@@ -61,7 +61,7 @@ from app.game import (
     canonical_tile_faces,
     choose_automated_action,
     deserialize_room_state,
-    finalize_completed_preview,
+    finalize_completed_hand,
     is_bonus_tile,
     serialize_room_state,
     sort_playable_tiles,
@@ -449,7 +449,7 @@ class SetupAndReplacementTests(unittest.TestCase):
         self.assertIn(replacement, dealer_hand.concealed_tiles)
         validate_room(result.state)
 
-    def test_all_twelve_bonuses_can_form_one_bounded_replacement_chain(self) -> None:
+    def test_eight_flower_win_stops_replacement_chain(self) -> None:
         source = AllBonusChainRandomSource()
         result = SingaporeGameEngine(source).setup_match(preview_room())
         room = result.state
@@ -464,19 +464,18 @@ class SetupAndReplacementTests(unittest.TestCase):
         ]
 
         self.assertGreater(MAX_AUTOMATED_CONTINUATIONS, 12)
-        self.assertEqual(len(bonus_events), 12)
+        self.assertEqual(len(bonus_events), 8)
         self.assertTrue(all(not event.initial for event in bonus_events))
-        self.assertEqual(len(dealer_hand.bonus_tiles), 12)
+        self.assertEqual(len(dealer_hand.bonus_tiles), 8)
         self.assertEqual(
             {tile.tile_id for tile in dealer_hand.bonus_tiles},
             {event.tile.tile_id for event in bonus_events},
         )
-        self.assertIsNotNone(dealer_hand.drawn_tile)
-        assert dealer_hand.drawn_tile is not None
-        self.assertFalse(is_bonus_tile(dealer_hand.drawn_tile))
-        self.assertEqual(len(draw_events), 13)
-        self.assertEqual(sum(event.replacement for event in draw_events), 12)
-        self.assertEqual(len(hand.wall.live_tiles), 68)
+        self.assertIsNone(dealer_hand.drawn_tile)
+        self.assertEqual(hand.result.reason, "EIGHT_FLOWERS")
+        self.assertEqual(len(draw_events), 8)
+        self.assertEqual(sum(event.replacement for event in draw_events), 7)
+        self.assertEqual(len(hand.wall.live_tiles), 73)
         self.assertEqual(len(hand.wall.reserve_tiles), 15)
         self.assertEqual(len(canonical_locations(room)), 148)
         self.assertEqual(len(set(canonical_locations(room))), 148)
@@ -486,7 +485,6 @@ class SetupAndReplacementTests(unittest.TestCase):
         }
         current_reserve_ids = {tile.tile_id for tile in hand.wall.reserve_tiles}
         self.assertTrue(replacement_ids.isdisjoint(current_reserve_ids))
-        self.assertTrue(all(not is_bonus_tile(tile) for tile in hand.wall.reserve_tiles))
         validate_room(room)
 
     def test_initial_bonus_processing_is_dealer_relative_and_provenance_safe(self) -> None:

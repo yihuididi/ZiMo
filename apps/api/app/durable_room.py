@@ -56,6 +56,8 @@ class GameRoom(DurableObject):
             reset = repository.initialize_schema()
             if reset:
                 await self.ctx.storage.deleteAlarm()
+                for socket in self.ctx.getWebSockets():
+                    _close_socket(socket, 4001, "Room retired for rules update")
             existing_alarm = await self.ctx.storage.getAlarm()
             now_ms = self._orchestrator.sample_time_ms()
             _live, presence_changed = self._reconcile_open_socket_presence(

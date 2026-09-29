@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Protocol
 
-from .actions import Chow, DomainAction, Kong, Pass, Pong
+from .actions import Chow, DeclareWin, DomainAction, Kong, Pass, Pong
 from .model import AutomatedSeatController, PolicyId, RoomState, SeatId
 from .observation import PlayerObservation, build_seat_observation
 from .runtime import RandomSource
@@ -47,7 +47,7 @@ class RandomBotPolicy:
     ) -> DomainAction:
         if not legal_actions:
             raise NoLegalActionsError("the automated seat has no legal actions")
-        for kind in (Kong, Pong, Chow, Pass):
+        for kind in (DeclareWin, Kong, Pong, Chow, Pass):
             choices = tuple(a for a in legal_actions if isinstance(a, kind))
             if choices:
                 return choices[0]

@@ -25,7 +25,7 @@ class PublicTileView(GameModel):
 
 
 class PublicExposedMeldView(GameModel):
-    kong_kind: Literal["KONG_3", "KONG_4"] | None = None
+    kong_kind: Literal["KONG_1", "KONG_3", "KONG_4"] | None = None
     visibility: Literal["exposed"] = "exposed"
     kind: MeldKind
     tiles: tuple[PublicTileView, ...]

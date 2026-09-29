@@ -10,6 +10,8 @@ export function roomView(
 ): PublicRoomView {
   return {
     apiVersion: "2",
+    rulesetVersion: "0.4.0",
+    stateSchemaVersion: 5,
     roomId: "room-a",
     revision: 7,
     presenceVersion: 0,

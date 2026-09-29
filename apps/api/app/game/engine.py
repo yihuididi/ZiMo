@@ -77,8 +77,8 @@ class ProjectionBuilder(Protocol):
     ) -> PublicRoomView: ...
 
 
-def finalize_completed_preview(state: RoomState, *, completed_at_ms: int) -> RoomState:
-    from .singapore_game import finalize_completed_preview as finalize
+def finalize_completed_hand(state: RoomState, *, completed_at_ms: int) -> RoomState:
+    from .singapore_game import finalize_completed_hand as finalize
 
     return finalize(state, completed_at_ms=completed_at_ms)
 
@@ -98,5 +98,5 @@ def legal_actions(state: RoomState, seat_id: SeatId) -> tuple[DomainAction, ...]
 __all__ = [
     "GameEngine", "IllegalGameActionError", "InvalidGameStateError",
     "MAX_AUTOMATED_CONTINUATIONS", "ObservationBuilder", "ProjectionBuilder",
-    "TransitionResult", "finalize_completed_preview", "legal_actions", "transition",
+    "TransitionResult", "finalize_completed_hand", "legal_actions", "transition",
 ]

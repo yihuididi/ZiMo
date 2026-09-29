@@ -15,6 +15,7 @@ from app.game import (
     PendingClaim,
     CompletePhase,
     DiscardClaimsPhase,
+    KongRobberyPhase,
     FinalTileDecisionPhase,
     AwaitingDrawPhase,
     SingaporeGameEngine,
@@ -27,7 +28,7 @@ from app.game import (
     build_seat_observation,
     build_public_room_view,
     validate_room,
-    finalize_completed_preview,
+    finalize_completed_hand,
     serialize_room_state,
     deserialize_room_state,
     IllegalGameActionError,
@@ -235,7 +236,10 @@ class ClaimTests(unittest.TestCase):
         ).state
         player = state.match.current_hand.player_hands[2]
         self.assertEqual(player.melds[0].kong_kind, "KONG_3")
-        self.assertIsNotNone(player.drawn_tile)
+        if isinstance(state.match.current_hand.phase, CompletePhase):
+            self.assertEqual(state.match.current_hand.result.reason, "EIGHT_FLOWERS")
+        else:
+            self.assertIsNotNone(player.drawn_tile)
         self.assertEqual(len(player.concealed_tiles), 10)
         self.assertIn(state.match.current_hand.discards[0].tile, player.melds[0].tiles)
         validate_room(state)
@@ -256,27 +260,16 @@ class ClaimTests(unittest.TestCase):
         self.assertEqual(player.melds[0].kong_kind, "KONG_4")
         self.assertEqual(len(player.concealed_tiles), 10)
         self.assertEqual(len(state.match.current_hand.wall.reserve_tiles), 15)
-        self.assertTrue(
-            any(
-                isinstance(a, Kong) for a in engine.legal_actions(state, player.seat_id)
-            )
-        )
+        if isinstance(state.match.current_hand.phase, CompletePhase):
+            self.assertEqual(state.match.current_hand.result.reason, "EIGHT_FLOWERS")
+        else:
+            self.assertTrue(any(isinstance(a, Kong) for a in engine.legal_actions(state, player.seat_id)))
 
     def test_all_bonus_chain_and_no_unsupported_actions(self):
         engine, state = started(AllBonusChainRandomSource())
-        self.assertEqual(len(state.match.current_hand.player_hands[0].bonus_tiles), 12)
-        self.assertTrue(
-            all(
-                a.type in {"discard", "kong"}
-                for a in engine.legal_actions(state, SeatId("seat-0"))
-            )
-        )
-        self.assertTrue(
-            all(
-                not isinstance(a, Kong) or a.kind is KongKind.CONCEALED
-                for a in engine.legal_actions(state, SeatId("seat-0"))
-            )
-        )
+        self.assertEqual(len(state.match.current_hand.player_hands[0].bonus_tiles), 8)
+        self.assertEqual(state.match.current_hand.result.reason, "EIGHT_FLOWERS")
+        self.assertEqual(engine.legal_actions(state, SeatId("seat-0")), ())
 
     def test_final_tile_kong_or_finish_without_replacement(self):
         engine, state = started(ArrangedDeck({0: [1] * 4}, draw=5))
@@ -339,12 +332,12 @@ class ClaimTests(unittest.TestCase):
                 hand = state.match.current_hand
                 validate_room(state)
                 if isinstance(hand.phase, CompletePhase):
-                    final = finalize_completed_preview(state, completed_at_ms=10000)
+                    final = finalize_completed_hand(state, completed_at_ms=10000)
                     self.assertEqual(
                         deserialize_room_state(serialize_room_state(final)), final
                     )
                     break
-                if isinstance(hand.phase, DiscardClaimsPhase):
+                if isinstance(hand.phase, (DiscardClaimsPhase, KongRobberyPhase)):
                     for seat in hand.phase.eligible_seat_ids:
                         actions = engine.legal_actions(state, seat)
                         state = engine.transition(

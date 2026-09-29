@@ -136,6 +136,8 @@ class PublicGameView(GameModel):
 
 class PublicRoomView(GameModel):
     api_version: Literal["2"] = "2"
+    ruleset_version: Literal["0.4.0"] = "0.4.0"
+    state_schema_version: Literal[5] = 5
     room_id: RoomId
     revision: int = Field(ge=0)
     presence_version: int = Field(default=0, ge=0)
@@ -260,6 +262,8 @@ def build_public_room_view(
         )
     presence = {} if disconnected_players is None else disconnected_players
     return PublicRoomView(
+        ruleset_version=room.ruleset_version,
+        state_schema_version=room.state_schema_version,
         room_id=room.room_id,
         revision=room.revision,
         presence_version=presence_version,

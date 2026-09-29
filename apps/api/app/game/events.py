@@ -78,6 +78,13 @@ class WinDeclared(GameModel):
     window_id: WindowId | None = None
 
 
+class FlowerTransferred(GameModel):
+    type: Literal["flowerTransferred"] = "flowerTransferred"
+    from_seat_id: SeatId = Field(min_length=1)
+    to_seat_id: SeatId = Field(min_length=1)
+    tile: PhysicalTile
+
+
 class HandCompleted(GameModel):
     type: Literal["handCompleted"] = "handCompleted"
     result: HandResult
@@ -93,6 +100,7 @@ DomainEvent = Annotated[
     | MeldDeclared
     | KongDeclared
     | WinDeclared
+    | FlowerTransferred
     | HandCompleted,
     Field(discriminator="type"),
 ]
