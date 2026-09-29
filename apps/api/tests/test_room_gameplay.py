@@ -44,6 +44,29 @@ class DuplicateFaceRandomSource(ZeroRandomSource):
         return tuple(result)
 
 
+class WinningDrawRandomSource(ZeroRandomSource):
+    """Deal the host four Bamboo Pongs and a Bamboo pair on the opening draw."""
+
+    def shuffled(self, values):  # type: ignore[no-untyped-def]
+        remaining = list(values)
+        def take(rank):
+            tile = next(tile for tile in remaining if tile.face.family.value == "BAMBOO" and tile.face.value == rank)
+            remaining.remove(tile)
+            return tile
+        own = [take(rank) for rank in (1, 2, 3, 4) for _ in range(3)]
+        own.append(take(5))
+        draw = take(5)
+        dealt = [None] * 52
+        for offset, tile in zip(range(0, 52, 4), own, strict=True):
+            dealt[offset] = tile
+        filler = iter(remaining)
+        for offset, tile in enumerate(dealt):
+            if tile is None:
+                dealt[offset] = next(filler)
+        used = set(dealt)
+        return tuple((*dealt, draw, *(tile for tile in remaining if tile not in used)))
+
+
 class DeterministicCapabilities:
     def __init__(self) -> None:
         self.count = 0
@@ -321,8 +344,12 @@ class RoomGameplayTests(unittest.TestCase):
                 "discardWindow",
                 "chow",
                 "pong",
+                "kong1",
                 "kong3",
                 "kong4",
+                "game",
+                "fanBreakdown",
+                "kongRobbery",
             ),
         )
         self.assertEqual(view.game.status, MatchStatus.ACTIVE)  # type: ignore[union-attr]
@@ -466,7 +493,7 @@ class RoomGameplayTests(unittest.TestCase):
         advanced = self.service.authenticated_view(created.player_token)
         self.assertEqual(advanced.revision, 3)
 
-    def test_preview_runs_to_one_persisted_tie(self) -> None:
+    def test_full_hand_runs_to_one_persisted_win(self) -> None:
         created, started = self.start_preview()
         view = started.view
         command_number = 0
@@ -496,7 +523,7 @@ class RoomGameplayTests(unittest.TestCase):
                 created.player_token
             )
         else:  # pragma: no cover - guard against a non-monotonic pump
-            self.fail("preview did not terminate within its finite wall bound")
+            self.fail("hand did not terminate within its finite wall bound")
 
         self.assertEqual(view.status, RoomStatus.FINISHED)
         self.assertEqual(view.game.status, MatchStatus.FINISHED)  # type: ignore[union-attr]
@@ -505,17 +532,42 @@ class RoomGameplayTests(unittest.TestCase):
         state = self.repository.load_room()
         self.assertIsNotNone(state)
         self.assertEqual(len(state.match.hand_history), 1)  # type: ignore[union-attr]
-        self.assertEqual(state.match.result.reason, "LIVE_WALL_EXHAUSTED")  # type: ignore[union-attr]
-        tied = [
+        hand_result = state.match.hand_history[0]
+        self.assertEqual(hand_result.outcome.value, "WIN")
+        self.assertGreaterEqual(hand_result.fan, 1)
+        completed = [
             event
             for event in self.service.projected_events(created.player_token).events
-            if event.type == "previewTied"
+            if event.type == "handCompleted"
         ]
-        self.assertEqual(len(tied), 1)
-        self.assertEqual(
-            tied[0].payload,
-            {"outcome": "TIE", "reason": "LIVE_WALL_EXHAUSTED"},
+        self.assertEqual(len(completed), 1)
+        self.assertEqual(completed[0].payload["outcome"], "WIN")
+        self.assertEqual(completed[0].payload["winnerSeatId"], str(hand_result.winner_seat_id))
+        self.assertEqual(completed[0].payload["fan"], hand_result.fan)
+        self.assertEqual(completed[0].payload["cappedFan"], hand_result.capped_fan)
+
+    def test_self_draw_game_persists_winner_and_fan_before_projection(self) -> None:
+        self.service = RoomOrchestrator(
+            self.repository,
+            clock=self.clock,
+            credential_source=self.credentials,
+            id_source=self.ids,
+            random_source=WinningDrawRandomSource(),
         )
+        created, started = self.start_preview()
+        game = next(action for action in started.view.actions if action.label == "Game")
+        completed = self.service.execute_command(
+            created.player_token, "declare-game", started.view.revision, game.action_id,
+        )
+        result = completed.view.game.result
+        self.assertEqual(completed.view.status, RoomStatus.FINISHED)
+        self.assertEqual(result.winner_seat_id, completed.view.seats[0].seat_id)
+        self.assertGreaterEqual(result.fan, 6)
+        self.assertEqual(result.capped_fan, 5)
+        self.assertEqual(self.repository.load_room().match.hand_history, (result,))
+        events = self.service.projected_events(created.player_token).events
+        self.assertEqual(events[-1].type, "handCompleted")
+        self.assertEqual(events[-1].payload["outcome"], "WIN")
 
 
 if __name__ == "__main__":

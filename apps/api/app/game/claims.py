@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from .actions import Chow, DomainAction, Kong, KongKind, Pass, Pong
+from .actions import Chow, DeclareWin, DomainAction, Kong, KongKind, Pass, Pong
 from .model import (
     ClaimKind,
     DiscardClaimsPhase,
@@ -13,7 +13,10 @@ from .model import (
     PlayerHand,
     SeatId,
     TileFamily,
+    Wind,
+    WinSource,
 )
+from .scoring import evaluate_win
 from .tiles import sort_playable_tiles
 
 CLAIM_PRIORITY = {
@@ -56,7 +59,8 @@ def concealed_kongs(player: PlayerHand) -> tuple[Kong, ...]:
 
 
 def claim_actions(
-    hand: HandState, seat_id: SeatId, seats: tuple[SeatId, ...]
+    hand: HandState, seat_id: SeatId, seats: tuple[SeatId, ...],
+    *, prevailing_wind: Wind = Wind.EAST, dealer_seat_id: SeatId | None = None,
 ) -> tuple[DomainAction, ...]:
     phase = hand.phase
     if not isinstance(phase, DiscardClaimsPhase):
@@ -74,6 +78,15 @@ def claim_actions(
         seat_id=seat_id, window_id=phase.window_id, discard_sequence=discard.sequence
     )
     actions: list[DomainAction] = []
+    dealer = seats[0] if dealer_seat_id is None else dealer_seat_id
+    own_wind = (Wind.EAST, Wind.SOUTH, Wind.WEST, Wind.NORTH)[
+        (seats.index(seat_id) - seats.index(dealer)) % 4
+    ]
+    if face not in player.passed_game_faces and face != player.last_discard_face and evaluate_win(
+        hand, player, winning_tile=face, source=WinSource.DISCARD,
+        prevailing_wind=prevailing_wind, own_wind=own_wind,
+    ) is not None:
+        actions.append(DeclareWin(seat_id=seat_id, window_id=phase.window_id))
     if len(matching) == 3:
         actions.append(
             Kong(

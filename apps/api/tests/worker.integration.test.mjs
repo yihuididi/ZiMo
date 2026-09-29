@@ -263,6 +263,8 @@ async function createRoom(displayName = "Host") {
   });
   expect(created.view).toMatchObject({
     apiVersion: "2",
+    rulesetVersion: "0.4.0",
+    stateSchemaVersion: 5,
     roomId: created.roomId,
     viewerPlayerId: created.playerId,
     revision: 0,
@@ -275,7 +277,8 @@ async function createRoom(displayName = "Host") {
       "drawDiscard",
       "bonusTiles",
       "discardWindow",
-      "chow", "pong", "kong3", "kong4",
+      "chow", "pong", "kong1", "kong3", "kong4",
+      "game", "fanBreakdown", "kongRobbery",
     ],
   });
   expectDisconnected(created.view, created.playerId);

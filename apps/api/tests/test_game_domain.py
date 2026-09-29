@@ -671,6 +671,7 @@ class TaggedUnionTests(unittest.TestCase):
             KongRobberyPhase(
                 window_id=WindowId("window-2"),
                 declaring_seat_id=SeatId("seat-0"),
+                tile_id=TileId("tile-1"),
                 eligible_seat_ids=(SeatId("seat-1"),),
             ),
             CompletePhase(),
@@ -774,8 +775,8 @@ class SnapshotAndEngineTests(unittest.TestCase):
     def test_canonical_camel_case_json_round_trip(self) -> None:
         encoded = self.room.canonical_json()
         self.assertIn('"roomId":"room-1"', encoded)
-        self.assertNotIn('"rulesetVersion"', encoded)
-        self.assertNotIn('"stateSchemaVersion"', encoded)
+        self.assertIn('"rulesetVersion":"0.4.0"', encoded)
+        self.assertIn('"stateSchemaVersion":5', encoded)
         self.assertEqual(deserialize_room_state(encoded), self.room)
         self.assertEqual(list(json.loads(encoded)), sorted(json.loads(encoded)))
 

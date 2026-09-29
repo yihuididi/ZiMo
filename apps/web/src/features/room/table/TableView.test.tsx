@@ -93,7 +93,7 @@ describe("Game table", () => {
     expect(screen.getByRole("img", { name: "North Wind" })).toBeVisible();
 
     expect(screen.getByLabelText("Preview limitations")).toHaveTextContent(
-      "Game, Kong-1, scoring and payments, settings, and additional hands",
+      "Game and fan are available. Payments, editable settings, and additional hands",
     );
     expect(document.body.innerHTML).not.toContain("opaque-discard");
     expect(document.body.innerHTML).not.toContain("tileId");
@@ -210,6 +210,7 @@ describe("Game table", () => {
             providerSeatId: null,
             winSource: null,
             fan: 0,
+            cappedFan: 0,
             fanAwards: [],
             payments: [],
             reason: "Wall exhausted",
@@ -224,10 +225,30 @@ describe("Game table", () => {
       }),
     );
 
-    expect(screen.getByText("Preview complete")).toBeVisible();
-    expect(screen.getByText(/ends in a tie/i)).toBeVisible();
+    expect(screen.getByText("Hand tied")).toBeVisible();
+    expect(screen.getByText(/live wall is exhausted/i)).toBeVisible();
     expect(screen.queryByRole("button", { name: /next hand/i })).not.toBeInTheDocument();
-    expect(document.title).toBe("Preview complete · ZiMo Mahjong");
+    expect(document.title).toBe("Hand complete · ZiMo Mahjong");
+  });
+
+  it("renders the server's winner and fan breakdown", () => {
+    const base = activeTableView();
+    renderTable(activeTableView({
+      status: "FINISHED",
+      actions: [],
+      game: {
+        ...base.game!, status: "FINISHED",
+        result: {
+          outcome: "WIN", winnerSeatId: "seat-0", providerSeatId: null,
+          winSource: "SELF_DRAW", fan: 6, cappedFan: 5,
+          fanAwards: [{ name: "All Pong", fan: 2 }, { name: "Full Color", fan: 4 }],
+          payments: [], reason: "STANDARD",
+        },
+      },
+    }));
+    expect(screen.getByRole("region", { name: "Winning fan breakdown" })).toHaveTextContent("6 raw fan · 5 capped fan");
+    expect(screen.getByText("All Pong")).toBeVisible();
+    expect(screen.getByText("Full Color")).toBeVisible();
   });
 });
 
@@ -255,7 +276,7 @@ describe("Claim actions at the table", () => {
     fireEvent.click(chows[1]);
     expect(onRunAction).toHaveBeenCalledWith(view.actions[1]);
     expect(within(choices).getByRole("button", { name: "Pass" })).toBeEnabled();
-    expect(screen.getByLabelText("Preview limitations")).toHaveTextContent("Game, Kong-1");
+    expect(screen.getByLabelText("Preview limitations")).toHaveTextContent("Game and fan are available");
     expect(screen.queryByRole("button", { name: "Game" })).not.toBeInTheDocument();
   });
 
@@ -290,5 +311,15 @@ describe("Claim actions at the table", () => {
     fireEvent.click(screen.getByRole("button", { name: "Finish Hand" }));
     expect(onRunAction).toHaveBeenCalledWith(view.actions[0]);
     expect(screen.queryByRole("timer")).not.toBeInTheDocument();
+  });
+
+  it("shows Game and the robbery deadline when offered by the server", () => {
+    const view = claimView();
+    view.game!.phase = { type: "kongRobbery", activeSeatId: null, windowId: view.windowId, discardSequence: null, declaringSeatId: "seat-1" };
+    view.actions = [{ actionId: "game-1", label: "Game", enabled: true, presentationSlot: "claimActions" }];
+    const { onRunAction } = renderTable(view);
+    expect(screen.getByRole("timer", { name: "Robbery window countdown" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Game" }));
+    expect(onRunAction).toHaveBeenCalledWith(view.actions[0]);
   });
 });

@@ -106,6 +106,15 @@
   white-space: nowrap;
 }
 
+.fan-result {
+  margin-block: 0.8rem;
+}
+
+.fan-result h2 { margin: 0 0 0.4rem; }
+.fan-result p { margin: 0 0 0.6rem; color: var(--muted); }
+.fan-result ul { margin: 0; padding: 0; list-style: none; }
+.fan-result li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.3rem 0; border-top: 1px solid var(--line); }
+
 .phase-status {
   min-height: 3.6rem;
   margin: 0.75rem 0;

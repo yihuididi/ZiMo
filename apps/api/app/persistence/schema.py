@@ -15,13 +15,14 @@ from .sql import (
 
 _ROOM_STATE_SINGLETON_ID = 1
 _DISCONNECT_GRACE_MS = 300_000
-_LATEST_SCHEMA_VERSION = 5
+_LATEST_SCHEMA_VERSION = 6
 _MIGRATION_NAMES = {
     1: "milestone_1_foundation",
     2: "milestone_2_room_security",
     3: "milestone_2_player_presence",
     4: "milestone_3_gameplay_deadline",
     5: "current_room_schema",
+    6: "milestone_5_room_schema",
 }
 _REQUIRED_APPLICATION_TABLES = {
     "_sql_schema_migrations",
@@ -187,7 +188,7 @@ def initialize_schema(
             (int(_row_value(row, "id")), str(_row_value(row, "name")))
             for row in history_rows
         ]
-        if history == [(5, _MIGRATION_NAMES[5])]:
+        if history == [(6, _MIGRATION_NAMES[6])]:
             if application_table_names(executor) != _REQUIRED_APPLICATION_TABLES:
                 raise UnsupportedSchemaVersionError("application SQL table set is invalid")
             return False
@@ -196,7 +197,7 @@ def initialize_schema(
             (migration_id, _MIGRATION_NAMES[migration_id])
             for migration_id in range(1, 5)
         ]
-        if history and history != legacy_history[:len(history)]:
+        if history and history != [(5, _MIGRATION_NAMES[5])] and history != legacy_history[:len(history)]:
             raise UnsupportedSchemaVersionError(
                 f"unsupported SQL migration history: {history!r}"
             )
@@ -220,8 +221,8 @@ def initialize_schema(
         executor.exec("DELETE FROM _sql_schema_migrations")
         executor.exec(
             "INSERT INTO _sql_schema_migrations (id, name, applied_at_ms) VALUES (?, ?, ?)",
-            5,
-            _MIGRATION_NAMES[5],
+            6,
+            _MIGRATION_NAMES[6],
             timestamp,
         )
         if application_table_names(executor) != _REQUIRED_APPLICATION_TABLES:

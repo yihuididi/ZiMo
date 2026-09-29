@@ -130,7 +130,8 @@ _GAMEPLAY_AUDIT_EVENT_TYPES = frozenset(
         "handStarted",
         "bonusExposed",
         "tileDiscarded",
-        "previewTied",
+        "handCompleted",
+        "flowerTransferred",
         "claimResolved",
         "meldDeclared",
     }
@@ -446,7 +447,8 @@ def _validate_public_gameplay_event_details(
             "tileFamily",
             "tileValue",
         },
-        "previewTied": {"outcome", "reason"},
+        "handCompleted": {"outcome", "winnerSeatId", "providerSeatId", "winSource", "fan", "cappedFan", "reason"},
+        "flowerTransferred": {"fromSeatId", "toSeatId", "tileFamily", "tileValue"},
         "claimResolved": {"discardSequence", "seatId", "claimKind"},
         "meldDeclared": {
             "seatId",
@@ -477,12 +479,20 @@ def _validate_public_gameplay_event_details(
     elif event_type == "claimResolved":
         _require_positive_int(value["discardSequence"], "discardSequence")
         _require_text(value["seatId"], "seatId")
-        if value["claimKind"] not in {"CHOW", "PONG", "KONG"}:
+        if value["claimKind"] not in {"CHOW", "PONG", "KONG", "WIN"}:
             raise ValueError("invalid resolved claim kind")
+    elif event_type == "flowerTransferred":
+        _require_text(value["fromSeatId"], "fromSeatId")
+        _require_text(value["toSeatId"], "toSeatId")
+        if value["fromSeatId"] == value["toSeatId"]:
+            raise ValueError("flower transfer seats must differ")
+        if value["tileFamily"] not in {"FLOWER", "SEASON"} or type(value["tileValue"]) is not int or not 1 <= value["tileValue"] <= 4:
+            raise ValueError("invalid transferred flower")
     elif event_type == "meldDeclared":
         _require_text(value["seatId"], "seatId")
         if value["kind"] not in {"CHOW", "PONG", "KONG"} or value["kongKind"] not in {
             None,
+            "KONG_1",
             "KONG_3",
             "KONG_4",
         }:
@@ -503,8 +513,33 @@ def _validate_public_gameplay_event_details(
             _require_positive_int(value["discardSequence"], "discardSequence")
         elif value["discardSequence"] is not None:
             raise ValueError("invalid meld provenance")
-    elif value != {"outcome": "TIE", "reason": "LIVE_WALL_EXHAUSTED"}:
-        raise ValueError("previewTied details are not allow-listed")
+    elif event_type == "handCompleted":
+        if value["outcome"] not in {"WIN", "TIE"}:
+            raise ValueError("invalid hand outcome")
+        for key in ("winnerSeatId", "providerSeatId"):
+            if value[key] is not None:
+                _require_text(value[key], key)
+        if value["winSource"] not in {None, "SELF_DRAW", "DISCARD", "ROBBED_KONG"}:
+            raise ValueError("invalid win source")
+        _require_non_negative_int(value["fan"], "fan")
+        _require_non_negative_int(value["cappedFan"], "cappedFan")
+        if value["cappedFan"] != min(value["fan"], 5):
+            raise ValueError("invalid capped fan")
+        if value["reason"] is not None:
+            _require_text(value["reason"], "reason")
+        if value["outcome"] == "TIE" and (
+            value["winnerSeatId"] is not None or value["providerSeatId"] is not None
+            or value["winSource"] is not None or value["fan"] != 0
+            or value["reason"] != "LIVE_WALL_EXHAUSTED"
+        ):
+            raise ValueError("invalid tie result")
+        if value["outcome"] == "WIN" and (
+            value["winnerSeatId"] is None or value["winSource"] is None
+            or value["fan"] < 1
+            or (value["winSource"] == "SELF_DRAW") != (value["providerSeatId"] is None)
+            or value["winnerSeatId"] == value["providerSeatId"]
+        ):
+            raise ValueError("invalid winning result")
 
 
 def _validate_event(event: ProjectedAuditEvent) -> None:

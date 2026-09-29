@@ -208,19 +208,21 @@ function PhaseStatus({ view }: { view: PublicRoomView }) {
     : null;
 
   if (view.game?.status === "FINISHED") {
+    const result = view.game.result;
+    const winner = view.seats.find(seat => seat.seatId === result?.winnerSeatId);
     return (
       <div className="phase-status phase-finished" role="status">
-        <strong>Preview complete</strong>
-        <span>The wall is exhausted. This preview ends in a tie.</span>
+        <strong>{result?.outcome === "WIN" ? `${winner ? occupantName(winner) : "Player"} wins` : "Hand tied"}</strong>
+        <span>{result?.outcome === "WIN" ? `${result.cappedFan} capped fan` : "The live wall is exhausted."}</span>
       </div>
     );
   }
 
-  if (phase?.type === "discardClaims" && view.deadlineMs !== null) {
+  if ((phase?.type === "discardClaims" || phase?.type === "kongRobbery") && view.deadlineMs !== null) {
     return (
       <div className="phase-status phase-window">
-        <span>Every discard rests for the full claim window.</span>
-        <strong role="timer" aria-label="Discard window countdown">
+        <span>{phase.type === "kongRobbery" ? "Kong-1 may be robbed for Game." : "Every discard rests for the full claim window."}</span>
+        <strong role="timer" aria-label={phase.type === "kongRobbery" ? "Robbery window countdown" : "Discard window countdown"}>
           {countdown.resolving
             ? "Resolving…"
             : countdown.remainingMs === null
@@ -308,7 +310,7 @@ export function TableView({
     hasDiscardActions
       ? "Your turn · ZiMo Mahjong"
       : view.game?.status === "FINISHED"
-        ? "Preview complete · ZiMo Mahjong"
+        ? "Hand complete · ZiMo Mahjong"
         : "Mahjong table · ZiMo Mahjong",
   );
 
@@ -341,11 +343,20 @@ export function TableView({
       </div>
 
       <aside className="preview-notice" aria-label="Preview limitations">
-        <strong>Game preview</strong>
-        <span>Game, Kong-1, scoring and payments, settings, and additional hands are unavailable.</span>
+        <strong>One-hand preview</strong>
+        <span>Game and fan are available. Payments, editable settings, and additional hands are coming later.</span>
       </aside>
 
       <PhaseStatus view={view} />
+      {view.game?.status === "FINISHED" && view.game.result?.outcome === "WIN" && (
+        <section className="panel fan-result" aria-label="Winning fan breakdown">
+          <h2>Winning hand</h2>
+          <p>{view.game.result.winSource === "SELF_DRAW" ? "Self draw" : view.game.result.winSource === "ROBBED_KONG" ? "Robbed Kong-1" : "Discard Game"} · {view.game.result.fan} raw fan · {view.game.result.cappedFan} capped fan</p>
+          <ul>{view.game.result.fanAwards.map((award, index) => (
+            <li key={`${award.name}-${index}`}><span>{award.name}</span><strong>{award.fan}</strong></li>
+          ))}</ul>
+        </section>
+      )}
       {(choiceActions.length > 0 || view.game?.ownClaimSubmitted) && (
         <section className="table-choices" aria-label="Table choices">
           {view.game?.ownClaimSubmitted

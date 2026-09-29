@@ -30,7 +30,7 @@ class AutomatedDecisionRequested(GameModel):
 
 
 class MatchCompletionRequested(GameModel):
-    """Ask room orchestration to finalize a clock-free completed preview."""
+    """Ask room orchestration to finalize a clock-free completed hand."""
 
     type: Literal["matchCompletionRequested"] = "matchCompletionRequested"
 

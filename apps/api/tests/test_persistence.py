@@ -285,7 +285,7 @@ def test_schema_has_exact_tables_and_migration_is_idempotent(
     assert tables == EXPECTED_TABLES
     assert database.execute(
         "SELECT id, name, applied_at_ms FROM _sql_schema_migrations"
-    ).fetchall() == [(5, "current_room_schema", 900)]
+    ).fetchall() == [(6, "milestone_5_room_schema", 900)]
 
 
 def test_schema_ignores_cloudflare_runtime_internal_tables(
@@ -305,7 +305,7 @@ def test_schema_ignores_cloudflare_runtime_internal_tables(
     ("tamper_sql", "message"),
     (
         (
-            "UPDATE _sql_schema_migrations SET id = 6 WHERE id = 5",
+            "UPDATE _sql_schema_migrations SET id = 7 WHERE id = 6",
             "migration history",
         ),
         (
@@ -533,6 +533,22 @@ def test_legacy_database_is_reset_once_and_old_credentials_retire(
     assert "state_schema_version" not in columns
     assert repository.initialize_schema(applied_at_ms=6_000) is False
     assert scalar(database, "SELECT applied_at_ms FROM _sql_schema_migrations") == 5_000
+
+
+def test_milestone_four_room_is_retired_on_schema_six(
+    database: sqlite3.Connection,
+) -> None:
+    repository = RoomRepository.from_sqlite(database)
+    repository.initialize_schema(applied_at_ms=900)
+    repository.create_room(player_room_state(), players=(player_record(),))
+    database.execute("UPDATE _sql_schema_migrations SET id = 5, name = 'current_room_schema'")
+
+    assert repository.initialize_schema(applied_at_ms=5_000) is True
+    assert repository.load_room() is None
+    assert repository.get_player("player-1") is None
+    assert database.execute("SELECT id, name FROM _sql_schema_migrations").fetchall() == [
+        (6, "milestone_5_room_schema")
+    ]
 
 
 def test_room_commit_cleans_revoked_presence_and_freezes_match_deadlines(

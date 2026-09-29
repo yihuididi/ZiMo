@@ -17,14 +17,18 @@ if __package__.startswith("app."):
         Pong,
         Kong,
         Pass,
+        DeclareWin,
         FinishHand,
         DiscardClaimsPhase,
+        KongRobberyPhase,
         DiscardWindowResolved,
         MeldDeclared,
         PublicTileView,
         DomainAction,
         DomainEvent,
         HandCompleted,
+        FlowerTransferred,
+        WinDeclared,
         HandOutcome,
         HandSetupCompleted,
         MatchCompletionRequested,
@@ -37,7 +41,7 @@ if __package__.startswith("app."):
         TransitionResult,
         build_seat_observation,
         rules_for_id,
-        finalize_completed_preview,
+        finalize_completed_hand,
     )
     from ..persistence import GameplayAuditPayload, ProjectedAuditEvent
 else:  # pragma: no cover - Python Workers load modules from the app directory.
@@ -52,14 +56,18 @@ else:  # pragma: no cover - Python Workers load modules from the app directory.
         Pong,
         Kong,
         Pass,
+        DeclareWin,
         FinishHand,
         DiscardClaimsPhase,
+        KongRobberyPhase,
         DiscardWindowResolved,
         MeldDeclared,
         PublicTileView,
         DomainAction,
         DomainEvent,
         HandCompleted,
+        FlowerTransferred,
+        WinDeclared,
         HandOutcome,
         HandSetupCompleted,
         MatchCompletionRequested,
@@ -72,7 +80,7 @@ else:  # pragma: no cover - Python Workers load modules from the app directory.
         TransitionResult,
         build_seat_observation,
         rules_for_id,
-        finalize_completed_preview,
+        finalize_completed_hand,
     )
     from persistence import GameplayAuditPayload, ProjectedAuditEvent
 
@@ -207,7 +215,7 @@ class RoomGameplay:
         next_state, events = self._pump_gameplay(result, now_ms=now_ms)
         # Lobby start already assigned the one revision for this command.
         hand = next_state.match.current_hand
-        if isinstance(hand.phase, DiscardClaimsPhase):
+        if isinstance(hand.phase, (DiscardClaimsPhase, KongRobberyPhase)):
             phase = hand.phase.model_copy(update={"opening_revision": state.revision})
             hand = hand.model_copy(update={"phase": phase})
             next_state = self._validated_state_update(
@@ -254,7 +262,7 @@ class RoomGameplay:
 
             if isinstance(effect, ClaimWindowRequested):
                 if effect.duration_ms != DISCARD_WINDOW_MS:
-                    raise RuntimeError("preview discard windows must last 3000 ms")
+                    raise RuntimeError("claim windows must last 3000 ms")
                 if state.pending_deadline is not None:
                     raise RuntimeError(
                         "gameplay transition attempted to extend a deadline"
@@ -278,7 +286,7 @@ class RoomGameplay:
                 continue
 
             if isinstance(effect, MatchCompletionRequested):
-                state = finalize_completed_preview(
+                state = finalize_completed_hand(
                     self._validated_state_update(state, pending_deadline=None),
                     completed_at_ms=now_ms,
                 )
@@ -328,7 +336,7 @@ class RoomGameplay:
         hand = state.match.current_hand if state.match else None
         if (
             hand is None
-            or not isinstance(hand.phase, DiscardClaimsPhase)
+            or not isinstance(hand.phase, (DiscardClaimsPhase, KongRobberyPhase))
         ):
             return False
         opening = hand.phase.opening_revision
@@ -361,9 +369,10 @@ class RoomGameplay:
             "Kong-3"
             if isinstance(action, Kong) and action.kind.value == "KONG_3"
             else (
-                "Kong-4"
+                "Kong-1" if isinstance(action, Kong) and action.kind.value == "KONG_1" else "Kong-4"
                 if isinstance(action, Kong)
                 else (
+                    "Game" if isinstance(action, DeclareWin) else
                     "Finish Hand"
                     if isinstance(action, FinishHand)
                     else action.type.title()
@@ -377,7 +386,7 @@ class RoomGameplay:
                 tiles=tiles,
                 presentation_slot=(
                     "claimActions"
-                    if isinstance(hand.phase, DiscardClaimsPhase)
+                    if isinstance(hand.phase, (DiscardClaimsPhase, KongRobberyPhase))
                     else "turnActions"
                 ),
             ),
@@ -439,7 +448,7 @@ class RoomGameplay:
                 "action": action.canonical_data(),
                 "revision": (
                     state.match.current_hand.phase.opening_revision
-                    if isinstance(state.match.current_hand.phase, DiscardClaimsPhase)
+                    if isinstance(state.match.current_hand.phase, (DiscardClaimsPhase, KongRobberyPhase))
                     else state.revision
                 ),
                 "roomId": str(state.room_id),
@@ -526,6 +535,13 @@ def _project_gameplay_event(
             "tileFamily": event.tile.face.family.value,
             "tileValue": event.tile.face.value,
         }
+    if isinstance(event, FlowerTransferred):
+        return "flowerTransferred", {
+            "fromSeatId": str(event.from_seat_id),
+            "toSeatId": str(event.to_seat_id),
+            "tileFamily": event.tile.face.family.value,
+            "tileValue": event.tile.face.value,
+        }
     if isinstance(event, DiscardWindowResolved) and event.winning_seat_id is not None:
         return "claimResolved", {
             "discardSequence": event.discard_sequence,
@@ -544,12 +560,13 @@ def _project_gameplay_event(
             "discardSequence": event.meld.discard_sequence,
         }
     if isinstance(event, HandCompleted):
-        if event.result.outcome is not HandOutcome.TIE:
-            raise RuntimeError("the draw/discard preview may only complete as a tie")
-        if event.result.reason != "LIVE_WALL_EXHAUSTED":
-            raise RuntimeError("the preview tie reason is not allow-listed")
-        return "previewTied", {
+        return "handCompleted", {
             "outcome": event.result.outcome.value,
+            "winnerSeatId": event.result.winner_seat_id,
+            "providerSeatId": event.result.provider_seat_id,
+            "winSource": event.result.win_source.value if event.result.win_source else None,
+            "fan": event.result.fan,
+            "cappedFan": event.result.capped_fan,
             "reason": event.result.reason,
         }
     # TileDrawn and discard-window mechanics are deliberately not public audit
