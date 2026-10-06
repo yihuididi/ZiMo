@@ -10,8 +10,8 @@ export function roomView(
 ): PublicRoomView {
   return {
     apiVersion: "2",
-    rulesetVersion: "0.4.0",
-    stateSchemaVersion: 5,
+    rulesetVersion: "0.6.0",
+    stateSchemaVersion: 7,
     roomId: "room-a",
     revision: 7,
     presenceVersion: 0,
@@ -294,6 +294,7 @@ export function activeTableView(
       },
       liveWallTileCount: 67,
       reserveWallTileCount: 15,
+      payments: [],
       discards: [
         {
           sequence: 1,

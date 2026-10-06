@@ -136,7 +136,7 @@ class RoomGameplay:
             next_state,
             expected_revision=state.revision,
             events=self._gameplay_audit_events(
-                next_state, domain_events, created_at_ms=now_ms
+                next_state, domain_events, previous_state=state, created_at_ms=now_ms
             ),
         )
         return True
@@ -494,25 +494,42 @@ class RoomGameplay:
         state: RoomState,
         domain_events: tuple[DomainEvent, ...],
         *,
+        previous_state: RoomState,
         created_at_ms: int,
     ) -> tuple[ProjectedAuditEvent, ...]:
         projected: list[ProjectedAuditEvent] = []
+        previous_hand = previous_state.match.current_hand if previous_state.match else None
+        current_hand = state.match.current_hand if state.match else None
+        prior_count = len(previous_hand.payments) if previous_hand else 0
+        new_payments = current_hand.payments[prior_count:] if current_hand else ()
+        def add_public(event_type: str, details: dict[str, object]) -> None:
+            projected.append(ProjectedAuditEvent(
+                payload=GameplayAuditPayload(
+                    event_type=event_type, room_id=str(state.room_id),
+                    revision=state.revision, details_json=canonical_json(details),
+                ), created_at_ms=created_at_ms,
+            ))
+        def add_payments() -> None:
+            for payment in new_payments:
+                add_public("paymentMade", {
+                    "sequence": payment.sequence,
+                    "payerSeatId": str(payment.payer_seat_id),
+                    "recipientSeatId": str(payment.recipient_seat_id),
+                    "amount": payment.amount,
+                    "reason": payment.reason,
+                })
+        emitted_payments = False
         for event in domain_events:
+            if isinstance(event, HandCompleted) and not emitted_payments:
+                add_payments()
+                emitted_payments = True
             public = _project_gameplay_event(event)
             if public is None:
                 continue
             event_type, details = public
-            projected.append(
-                ProjectedAuditEvent(
-                    payload=GameplayAuditPayload(
-                        event_type=event_type,
-                        room_id=str(state.room_id),
-                        revision=state.revision,
-                        details_json=canonical_json(details),
-                    ),
-                    created_at_ms=created_at_ms,
-                )
-            )
+            add_public(event_type, details)
+        if not emitted_payments:
+            add_payments()
         return tuple(projected)
 
 
@@ -567,6 +584,7 @@ def _project_gameplay_event(
             "winSource": event.result.win_source.value if event.result.win_source else None,
             "fan": event.result.fan,
             "cappedFan": event.result.capped_fan,
+            "payoutBase": event.result.payout_base,
             "reason": event.result.reason,
         }
     # TileDrawn and discard-window mechanics are deliberately not public audit

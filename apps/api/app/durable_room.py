@@ -11,6 +11,7 @@ if __package__:
     from .config import Settings
     from .observability import log_unexpected
     from .persistence import RoomRepository
+    from .persistence.errors import RoomRetiredError
     from .room import RoomOrchestrator
     from .room.transport import (
         WS_PROTOCOL,
@@ -28,6 +29,7 @@ else:  # pragma: no cover - Python Workers load modules from the app directory.
     from config import Settings
     from observability import log_unexpected
     from persistence import RoomRepository
+    from persistence.errors import RoomRetiredError
     from room import RoomOrchestrator
     from room.transport import (
         WS_PROTOCOL,
@@ -58,11 +60,19 @@ class GameRoom(DurableObject):
                 await self.ctx.storage.deleteAlarm()
                 for socket in self.ctx.getWebSockets():
                     _close_socket(socket, 4001, "Room retired for rules update")
+                return
             existing_alarm = await self.ctx.storage.getAlarm()
             now_ms = self._orchestrator.sample_time_ms()
-            _live, presence_changed = self._reconcile_open_socket_presence(
-                now_ms=now_ms
-            )
+            try:
+                self._orchestrator.load_room()
+                _live, presence_changed = self._reconcile_open_socket_presence(
+                    now_ms=now_ms
+                )
+            except RoomRetiredError:
+                await self.ctx.storage.deleteAlarm()
+                for socket in self.ctx.getWebSockets():
+                    _close_socket(socket, 4001, "Room retired for rules update")
+                return
             # A constructor also runs immediately before an alarm handler. Do
             # not overwrite that waking alarm; the handler will reconcile it.
             if existing_alarm is None:
@@ -132,7 +142,13 @@ class GameRoom(DurableObject):
         """Run, then schedule and push every commit before returning."""
 
         generation = self._orchestrator.commit_generation
-        before = self._orchestrator.load_room()
+        try:
+            before = self._orchestrator.load_room()
+        except Exception as exc:
+            failure = rpc_failure(exc)
+            if failure is not None:
+                return failure
+            raise
         result = self._room_rpc(operation)
         if self._orchestrator.commit_generation != generation:
             after = self._orchestrator.cached_state
@@ -266,6 +282,8 @@ class GameRoom(DurableObject):
                     "roomNotFound",
                     "The room was not found.",
                 )
+        except RoomRetiredError as exc:
+            return worker_problem(exc.status_code, exc.code, exc.message)
         except Exception as exc:
             log_unexpected("room.websocket_load", exc)
             return worker_problem(
@@ -453,9 +471,18 @@ class GameRoom(DurableObject):
 
         now_ms = self._orchestrator.sample_time_ms()
         generation = self._orchestrator.commit_generation
-        confirmed_live, presence_changed = self._reconcile_open_socket_presence(
-            now_ms=now_ms
-        )
+        try:
+            self._orchestrator.load_room()
+            confirmed_live, presence_changed = self._reconcile_open_socket_presence(
+                now_ms=now_ms
+            )
+        except RoomRetiredError:
+            # A waking alarm can already be in delivery when initialization
+            # retires the old schema. Acknowledge it instead of retrying it.
+            await self.ctx.storage.deleteAlarm()
+            for socket in self.ctx.getWebSockets():
+                _close_socket(socket, 4001, "Room retired for rules update")
+            return
         self._orchestrator.advance_due(now_ms)
         expired_player_ids = self._orchestrator.expire_disconnected_players(
             tuple(sorted(confirmed_live)),

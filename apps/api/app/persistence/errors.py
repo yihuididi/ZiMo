@@ -31,6 +31,15 @@ class CorruptRoomStateError(PersistenceError):
     """Raised when canonical state and its indexed metadata disagree."""
 
 
+class RoomRetiredError(PersistenceError):
+    """An older room remains stored but cannot run under current rules."""
+
+    status_code = 410
+    code = "roomRetired"
+    message = "This room used an older ruleset. Create a new room to play."
+    current_revision = None
+
+
 class UnsupportedSchemaVersionError(PersistenceError):
     """Raised when storage was written by a newer or inconsistent schema."""
 
@@ -54,6 +63,7 @@ __all__ = [
     "ProcessedCommandConflictError",
     "RevisionConflictError",
     "RoomAlreadyExistsError",
+    "RoomRetiredError",
     "RoomNotFoundError",
     "SocketTicketUnavailableError",
     "UnsupportedSchemaVersionError",

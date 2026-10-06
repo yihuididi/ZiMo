@@ -8,6 +8,7 @@ import {
   getRoom,
   joinRoom,
   submitCommand,
+  updateConfig,
 } from "./lib/api";
 import { loadRoomSession, saveRoomSession } from "./lib/session";
 import type { PublicRoomView } from "./lib/types";
@@ -30,6 +31,7 @@ vi.mock("./lib/api", async (importOriginal) => {
     getRoom: vi.fn(),
     joinRoom: vi.fn(),
     submitCommand: vi.fn(),
+    updateConfig: vi.fn(),
   };
 });
 
@@ -206,6 +208,7 @@ describe("room UI", () => {
     vi.mocked(joinRoom).mockReset();
     vi.mocked(getRoom).mockReset();
     vi.mocked(submitCommand).mockReset();
+    vi.mocked(updateConfig).mockReset();
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: { writeText: vi.fn().mockResolvedValue(undefined) },
@@ -441,8 +444,28 @@ describe("room UI", () => {
     ]);
     expect(screen.getByText("You · Host")).toBeVisible();
     expect(screen.getByText("Bot", { exact: true })).toBeVisible();
-    expect(screen.getByText("Read only")).toBeVisible();
-    expect(screen.getByText("1–5 fan")).toBeVisible();
+    expect(screen.getByText("Host settings")).toBeVisible();
+    expect(screen.getByText("1–5")).toBeVisible();
+  });
+
+  it("lets the host save core rules through the revisioned config endpoint", async () => {
+    const initial = roomView();
+    const updated = roomView({
+      revision: initial.revision + 1,
+      config: { ...initial.config, shooterMode: true },
+    });
+    vi.mocked(updateConfig).mockResolvedValue({ type: "view", view: updated });
+    openHostLobby(initial);
+
+    fireEvent.click(screen.getByText("Edit rules"));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Shooter mode" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
+
+    await waitFor(() => expect(updateConfig).toHaveBeenCalledWith(
+      "room-a", "host-secret", initial.revision,
+      expect.objectContaining({ shooterMode: true, sevenPairsEnabled: false }),
+    ));
+    expect(await screen.findByText("On")).toBeVisible();
   });
 
   it("titles the room and focuses its heading when the lobby opens", () => {
@@ -1022,6 +1045,7 @@ describe("room UI", () => {
           reserveWallTileCount: 0,
           discards: [],
           balances: [],
+          payments: [],
           result: null,
           matchResult: null,
         },

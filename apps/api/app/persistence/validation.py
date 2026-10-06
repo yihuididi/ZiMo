@@ -18,7 +18,7 @@ else:
         rules_for_id,
     )
 
-from .errors import CorruptRoomStateError, PlayerProjectionError
+from .errors import CorruptRoomStateError, PlayerProjectionError, RoomRetiredError
 from .records import (
     GameplayAuditPayload,
     LobbyAuditPayload,
@@ -118,6 +118,12 @@ def _validate_persisted_gameplay_deadline(state: RoomState) -> None:
 
 def _record_from_row(row: Any) -> RoomStateRecord:
     snapshot_json = str(_row_value(row, "snapshot_json"))
+    try:
+        version = json.loads(snapshot_json).get("stateSchemaVersion")
+    except (ValueError, AttributeError):
+        version = None
+    if type(version) is int and 1 <= version < 7:
+        raise RoomRetiredError(RoomRetiredError.message)
     try:
         state = RoomState.model_validate_json(snapshot_json, strict=True)
     except Exception as exc:

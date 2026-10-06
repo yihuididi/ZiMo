@@ -131,6 +131,7 @@ _GAMEPLAY_AUDIT_EVENT_TYPES = frozenset(
         "bonusExposed",
         "tileDiscarded",
         "handCompleted",
+        "paymentMade",
         "flowerTransferred",
         "claimResolved",
         "meldDeclared",
@@ -447,7 +448,8 @@ def _validate_public_gameplay_event_details(
             "tileFamily",
             "tileValue",
         },
-        "handCompleted": {"outcome", "winnerSeatId", "providerSeatId", "winSource", "fan", "cappedFan", "reason"},
+        "handCompleted": {"outcome", "winnerSeatId", "providerSeatId", "winSource", "fan", "cappedFan", "payoutBase", "reason"},
+        "paymentMade": {"sequence", "payerSeatId", "recipientSeatId", "amount", "reason"},
         "flowerTransferred": {"fromSeatId", "toSeatId", "tileFamily", "tileValue"},
         "claimResolved": {"discardSequence", "seatId", "claimKind"},
         "meldDeclared": {
@@ -513,6 +515,14 @@ def _validate_public_gameplay_event_details(
             _require_positive_int(value["discardSequence"], "discardSequence")
         elif value["discardSequence"] is not None:
             raise ValueError("invalid meld provenance")
+    elif event_type == "paymentMade":
+        _require_positive_int(value["sequence"], "sequence")
+        payer = _require_text(value["payerSeatId"], "payerSeatId")
+        recipient = _require_text(value["recipientSeatId"], "recipientSeatId")
+        if payer == recipient:
+            raise ValueError("payment parties must differ")
+        _require_positive_int(value["amount"], "amount")
+        _require_text(value["reason"], "reason")
     elif event_type == "handCompleted":
         if value["outcome"] not in {"WIN", "TIE"}:
             raise ValueError("invalid hand outcome")
@@ -523,8 +533,9 @@ def _validate_public_gameplay_event_details(
             raise ValueError("invalid win source")
         _require_non_negative_int(value["fan"], "fan")
         _require_non_negative_int(value["cappedFan"], "cappedFan")
-        if value["cappedFan"] != min(value["fan"], 5):
+        if value["cappedFan"] > value["fan"]:
             raise ValueError("invalid capped fan")
+        _require_non_negative_int(value["payoutBase"], "payoutBase")
         if value["reason"] is not None:
             _require_text(value["reason"], "reason")
         if value["outcome"] == "TIE" and (

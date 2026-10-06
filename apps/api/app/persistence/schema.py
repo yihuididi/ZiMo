@@ -15,7 +15,7 @@ from .sql import (
 
 _ROOM_STATE_SINGLETON_ID = 1
 _DISCONNECT_GRACE_MS = 300_000
-_LATEST_SCHEMA_VERSION = 6
+_LATEST_SCHEMA_VERSION = 8
 _MIGRATION_NAMES = {
     1: "milestone_1_foundation",
     2: "milestone_2_room_security",
@@ -23,6 +23,8 @@ _MIGRATION_NAMES = {
     4: "milestone_3_gameplay_deadline",
     5: "current_room_schema",
     6: "milestone_5_room_schema",
+    7: "milestone_6_single_ruleset",
+    8: "complete_single_hand_rules",
 }
 _REQUIRED_APPLICATION_TABLES = {
     "_sql_schema_migrations",
@@ -134,7 +136,8 @@ _MIGRATION_THREE_STATEMENTS = (
     """
     CREATE TABLE room_presence (
         singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
-        presence_version INTEGER NOT NULL CHECK (presence_version >= 0)
+        presence_version INTEGER NOT NULL CHECK (presence_version >= 0),
+        retired INTEGER NOT NULL DEFAULT 0 CHECK (retired IN (0, 1))
     )
     """,
     "INSERT INTO room_presence (singleton_id, presence_version) VALUES (1, 0)",
@@ -188,7 +191,7 @@ def initialize_schema(
             (int(_row_value(row, "id")), str(_row_value(row, "name")))
             for row in history_rows
         ]
-        if history == [(6, _MIGRATION_NAMES[6])]:
+        if history == [(8, _MIGRATION_NAMES[8])]:
             if application_table_names(executor) != _REQUIRED_APPLICATION_TABLES:
                 raise UnsupportedSchemaVersionError("application SQL table set is invalid")
             return False
@@ -197,7 +200,7 @@ def initialize_schema(
             (migration_id, _MIGRATION_NAMES[migration_id])
             for migration_id in range(1, 5)
         ]
-        if history and history != [(5, _MIGRATION_NAMES[5])] and history != legacy_history[:len(history)]:
+        if history and history not in ([(5, _MIGRATION_NAMES[5])], [(6, _MIGRATION_NAMES[6])], [(7, _MIGRATION_NAMES[7])], [(6, _MIGRATION_NAMES[6]), (7, _MIGRATION_NAMES[7])]) and history != legacy_history[:len(history)]:
             raise UnsupportedSchemaVersionError(
                 f"unsupported SQL migration history: {history!r}"
             )
@@ -208,8 +211,7 @@ def initialize_schema(
         if existing_tables - _REQUIRED_APPLICATION_TABLES:
             raise UnsupportedSchemaVersionError("application SQL table set is invalid")
 
-        # Room identity, tokens, audit history, and alarms all belong to the
-        # retired room. Recreate every application table in one SQL transaction.
+        # Retire all recognized older releases; only one engine remains supported.
         for table in sorted(existing_tables - {"_sql_schema_migrations"}):
             executor.exec(f"DROP TABLE {table}")
         for statement in (
@@ -218,11 +220,13 @@ def initialize_schema(
             *_MIGRATION_THREE_STATEMENTS,
         ):
             executor.exec(statement)
+        if history:
+            executor.exec("UPDATE room_presence SET retired = 1 WHERE singleton_id = 1")
         executor.exec("DELETE FROM _sql_schema_migrations")
         executor.exec(
             "INSERT INTO _sql_schema_migrations (id, name, applied_at_ms) VALUES (?, ?, ?)",
-            6,
-            _MIGRATION_NAMES[6],
+            8,
+            _MIGRATION_NAMES[8],
             timestamp,
         )
         if application_table_names(executor) != _REQUIRED_APPLICATION_TABLES:

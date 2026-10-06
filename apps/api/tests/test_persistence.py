@@ -65,6 +65,7 @@ from app.persistence import (
     SocketTicketUnavailableError,
     UnsupportedSchemaVersionError,
 )
+from app.persistence.errors import RoomRetiredError
 from app.room import RoomOrchestrator
 
 
@@ -285,7 +286,7 @@ def test_schema_has_exact_tables_and_migration_is_idempotent(
     assert tables == EXPECTED_TABLES
     assert database.execute(
         "SELECT id, name, applied_at_ms FROM _sql_schema_migrations"
-    ).fetchall() == [(6, "milestone_5_room_schema", 900)]
+    ).fetchall() == [(8, "complete_single_hand_rules", 900)]
 
 
 def test_schema_ignores_cloudflare_runtime_internal_tables(
@@ -305,7 +306,7 @@ def test_schema_ignores_cloudflare_runtime_internal_tables(
     ("tamper_sql", "message"),
     (
         (
-            "UPDATE _sql_schema_migrations SET id = 7 WHERE id = 6",
+            "UPDATE _sql_schema_migrations SET id = 9 WHERE id = 8",
             "migration history",
         ),
         (
@@ -522,8 +523,10 @@ def test_legacy_database_is_reset_once_and_old_credentials_retire(
         )
 
     assert repository.initialize_schema(applied_at_ms=5_000) is True
-    assert repository.load_room() is None
-    assert RoomOrchestrator(repository).load_room() is None
+    with pytest.raises(RoomRetiredError):
+        repository.load_room()
+    with pytest.raises(RoomRetiredError):
+        RoomOrchestrator(repository).load_room()
     assert repository.get_player("player-1") is None
     assert repository.presence_version() == 0
     assert not list(database.execute("SELECT * FROM players"))
@@ -544,11 +547,33 @@ def test_milestone_four_room_is_retired_on_schema_six(
     database.execute("UPDATE _sql_schema_migrations SET id = 5, name = 'current_room_schema'")
 
     assert repository.initialize_schema(applied_at_ms=5_000) is True
-    assert repository.load_room() is None
+    with pytest.raises(RoomRetiredError):
+        repository.load_room()
     assert repository.get_player("player-1") is None
     assert database.execute("SELECT id, name FROM _sql_schema_migrations").fetchall() == [
-        (6, "milestone_5_room_schema")
+        (8, "complete_single_hand_rules")
     ]
+
+
+def test_milestone_five_room_is_deleted_and_retired(
+    database: sqlite3.Connection,
+) -> None:
+    repository = RoomRepository.from_sqlite(database)
+    repository.initialize_schema(applied_at_ms=900)
+    repository.create_room(player_room_state(), players=(player_record(),))
+    old = json.loads(database.execute("SELECT snapshot_json FROM room_state").fetchone()[0])
+    old["rulesetVersion"] = "0.4.0"
+    old["stateSchemaVersion"] = 5
+    database.execute("UPDATE room_state SET snapshot_json = ?", (json.dumps(old, separators=(",", ":"), sort_keys=True),))
+    database.execute("DELETE FROM _sql_schema_migrations")
+    database.execute("INSERT INTO _sql_schema_migrations VALUES (6, 'milestone_5_room_schema', 900)")
+
+    assert repository.initialize_schema(applied_at_ms=5_000) is True
+    with pytest.raises(RoomRetiredError, match="older ruleset"):
+        repository.load_room()
+    assert database.execute("SELECT COUNT(*) FROM room_state").fetchone()[0] == 0
+    assert database.execute("SELECT COUNT(*) FROM players").fetchone()[0] == 0
+    assert repository.initialize_schema(applied_at_ms=5_001) is False
 
 
 def test_room_commit_cleans_revoked_presence_and_freezes_match_deadlines(
@@ -1308,3 +1333,25 @@ def test_auth_and_socket_ticket_transactions_are_revision_neutral(
         repository.consume_socket_ticket("9" * 64, consumed_at_ms=1_300)
     assert repository.cleanup_socket_tickets(now_ms=1_300) == 1
     assert repository.load_room().revision == 0
+
+
+@pytest.mark.parametrize("history", [
+    [(7, "milestone_6_single_ruleset")],
+    [(6, "milestone_5_room_schema"), (7, "milestone_6_single_ruleset")],
+])
+def test_current_cutover_deletes_old_data_and_retirement_survives_reconstruction(database, history):
+    repository = RoomRepository.from_sqlite(database)
+    repository.initialize_schema(applied_at_ms=900)
+    repository.create_room(player_room_state(), players=(player_record(),))
+    database.execute("DELETE FROM _sql_schema_migrations")
+    for version, name in history:
+        database.execute("INSERT INTO _sql_schema_migrations VALUES (?, ?, 900)", (version, name))
+    assert repository.initialize_schema(applied_at_ms=1000)
+    reloaded = RoomRepository.from_sqlite(database)
+    assert not reloaded.initialize_schema(applied_at_ms=1001)
+    with pytest.raises(RoomRetiredError):
+        reloaded.load_room()
+    with pytest.raises(RoomRetiredError):
+        reloaded.authenticate_player(player_record().token_hash)
+    for table in ("room_state", "players", "events", "processed_commands", "socket_tickets", "room_credentials"):
+        assert database.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0

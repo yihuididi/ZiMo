@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import { useDocumentTitle } from "../../hooks/useDocumentTitle";
 import { useRoomSocket } from "../../hooks/useRoomSocket";
@@ -32,7 +33,7 @@ function LoadingRoom({ error }: { error: string | null }) {
         四
       </div>
       <p>Opening your room…</p>
-      {error && <p className="message error">{error}</p>}
+      {error && <><p className="message error">{error}</p><Link to="/">Create a new room</Link></>}
     </main>
   );
 }
@@ -119,6 +120,7 @@ export function AuthenticatedRoom({
       feedback={commands.feedback}
       onRunAction={commands.runAction}
       onRetryAction={commands.retryAction}
+      onConfigSaved={acceptView}
     />
   );
 }

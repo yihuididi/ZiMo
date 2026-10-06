@@ -16,7 +16,9 @@ export type RoomCapability =
   | "bonusTiles"
   | "discardWindow"
   | "chow" | "pong" | "kong1" | "kong3" | "kong4"
-  | "game" | "fanBreakdown" | "kongRobbery";
+  | "game" | "fanBreakdown" | "kongRobbery"
+  | "configurableCoreRules" | "payments" | "balances" | "paymentLedger"
+  | "bao" | "ruleVariations";
 
 export type TileRank = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 export type BonusNumber = 1 | 2 | 3 | 4;
@@ -93,6 +95,7 @@ export interface PhaseObservation {
   windowId: string | null;
   discardSequence: number | null;
   declaringSeatId: string | null;
+  kongKind?: "KONG_1" | "KONG_4" | null;
 }
 
 export interface SeatBalance {
@@ -113,6 +116,22 @@ export interface Payment {
   reason: string;
 }
 
+export type BaoReason = "DRAGONS" | "WINDS" | "VISIBLE_FAN_LIMIT" | "FULL_COLOR" | "FRESH_DISCARD";
+
+export interface BaoLiability {
+  beneficiarySeatId: string;
+  feederSeatId: string;
+  reasons: BaoReason[];
+  discardSequence: number;
+}
+
+export interface Settlement {
+  baseline: { seatId: string; amount: number }[];
+  liability: BaoLiability | null;
+  final: { seatId: string; amount: number }[];
+  robbedKongKind: "KONG_1" | "KONG_4" | null;
+}
+
 export interface HandResult {
   outcome: "WIN" | "TIE" | "ABORTED";
   winnerSeatId: string | null;
@@ -120,6 +139,8 @@ export interface HandResult {
   winSource: "SELF_DRAW" | "DISCARD" | "ROBBED_KONG" | null;
   fan: number;
   cappedFan: number;
+  payoutBase: number;
+  settlement?: Settlement | null;
   fanAwards: FanAward[];
   payments: Payment[];
   reason: string | null;
@@ -216,6 +237,7 @@ export interface OpponentSeatView extends BaseSeatView {
 export type PublicSeatView = SelfSeatView | OpponentSeatView;
 
 export interface PublicGameView {
+  baoLiabilities?: BaoLiability[];
   ownClaimSubmitted?: boolean;
   status: "PENDING_SETUP" | "ACTIVE" | "FINISHED";
   prevailingWind: Wind;
@@ -225,14 +247,15 @@ export interface PublicGameView {
   reserveWallTileCount: number;
   discards: PublicDiscardView[];
   balances: SeatBalance[];
+  payments: Payment[];
   result: HandResult | null;
   matchResult: MatchResult | null;
 }
 
 export interface PublicRoomView {
   apiVersion: "2";
-  rulesetVersion: "0.4.0";
-  stateSchemaVersion: 5;
+  rulesetVersion: "0.6.0";
+  stateSchemaVersion: 7;
   roomId: string;
   revision: number;
   presenceVersion: number;

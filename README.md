@@ -1,11 +1,13 @@
 # ZiMo Mahjong
 
-Milestone 5 of a server-authoritative, real-time multiplayer Mahjong application.
+Milestone 7 of a server-authoritative, real-time multiplayer Mahjong application.
 It provides private four-seat rooms, bearer-authenticated sessions, mixed human
 and bot tables, revisioned opaque commands, durable three-second discard windows,
 and hibernating WebSocket updates. New rooms play one complete hand with Chow,
-Pong, Kong-1/3/4, Game, and server-calculated fan. Payments, editable settings,
-and additional hands remain unavailable.
+Pong, Kong-1/3/4, Game, server-calculated fan, configurable core payouts,
+immediate payments, Bao liabilities, all configurable single-hand variations,
+zero-sum balances, and an explained payment ledger. Additional hands remain
+unavailable.
 
 ## Architecture
 
@@ -168,7 +170,7 @@ Never commit credentials or expose a Supabase service-role key to the frontend.
 
 Per the current project override, the existing Supabase initialization,
 configuration, dependencies, secrets declarations, and CLI project are retained.
-Supabase remains non-authoritative and unused by the Milestone 5 domain and
+Supabase remains non-authoritative and unused by the unified single-hand domain and
 persistence foundation. `supabase/config.toml` establishes only the local CLI
 project boundary; no Supabase tables, migrations, users, authentication flows, or
 database queries are introduced by this milestone.

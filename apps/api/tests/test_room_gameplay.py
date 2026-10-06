@@ -350,6 +350,7 @@ class RoomGameplayTests(unittest.TestCase):
                 "game",
                 "fanBreakdown",
                 "kongRobbery",
+                "configurableCoreRules", "payments", "balances", "paymentLedger", "bao", "ruleVariations",
             ),
         )
         self.assertEqual(view.game.status, MatchStatus.ACTIVE)  # type: ignore[union-attr]

@@ -3,7 +3,9 @@ function roomStub(request, env) {
   if (!roomId) {
     return null;
   }
-  return env.GAME_ROOM.getByName(roomId);
+  return new URL(request.url).searchParams.get("native") === "1"
+    ? env.GAME_ROOM.get(env.GAME_ROOM.idFromString(roomId))
+    : env.GAME_ROOM.getByName(roomId);
 }
 
 async function exactJsonBody(request, keys) {
@@ -39,6 +41,12 @@ export default {
     }
 
     const { pathname } = new URL(request.url);
+    if (request.method === "POST" && pathname === "/test/retire-legacy-room") {
+      return jsonTextResponse(await stub.test_retire_legacy_room());
+    }
+    if (request.method === "POST" && pathname === "/test/kong-four-deck") {
+      return jsonTextResponse(await stub.test_use_kong_four_deck());
+    }
     if (request.method === "POST" && pathname === "/initialize") {
       return new Response(await stub.initialize_room(await request.text()), {
         headers: { "Content-Type": "application/json" },

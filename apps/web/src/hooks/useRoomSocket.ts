@@ -189,6 +189,12 @@ export function useRoomSocket({
           stopForLostSession();
           return;
         }
+        if (reason instanceof ApiError && reason.code === "roomRetired") {
+          setError(reason.message);
+          setStatus("offline");
+          disposed = true;
+          return;
+        }
         setError(
           reason instanceof Error
             ? reason.message

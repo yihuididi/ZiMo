@@ -62,6 +62,34 @@ class _ZeroRandomSource:
         return tuple(values)
 
 
+class _KongFourRandomSource(_ZeroRandomSource):
+    """Conserved deck: host can declare Kong-4, next human waits on 13 Wonders."""
+
+    def shuffled(self, values):
+        from game.model import TileFamily as F
+        from game.scoring import WONDERS
+        pool = list(values)
+
+        def take(family, value):
+            tile = next(t for t in pool if t.face.family is family and t.face.value == value)
+            pool.remove(tile)
+            return tile
+
+        hands = {
+            0: [take(F.BAMBOO, 1) for _ in range(3)] + [take(F.DOTS, n) for n in (2,2,3,3,4,4,5,5,6,6)],
+            1: [take(f,v) for f,v in sorted(WONDERS, key=lambda x:(x[0].value,str(x[1])))
+                if (f,v) != (F.BAMBOO,1)] + [take(F.WIND,"EAST")],
+        }
+        draw = take(F.BAMBOO,1)
+        for seat in (2,3):
+            hands[seat] = []
+            for _ in range(13):
+                tile = next(t for t in pool if t.face.family in {F.BAMBOO,F.DOTS,F.CHARACTERS})
+                pool.remove(tile)
+                hands[seat].append(tile)
+        return tuple(hands[seat][i] for i in range(13) for seat in range(4)) + (draw,*pool)
+
+
 def _row_value(row: Any, column: str) -> Any:
     if isinstance(row, Mapping):
         return row[column]
@@ -87,6 +115,24 @@ class TestGameRoom(GameRoom):
         self._orchestrator._game_engine = SingaporeGameEngine(
             self._test_random
         )
+
+    async def test_use_kong_four_deck(self) -> str:
+        """Test-only arrangement; never exposed by the production room class."""
+        self._test_random = _KongFourRandomSource()
+        self._orchestrator._random_source = self._test_random
+        self._orchestrator._game_engine = SingaporeGameEngine(self._test_random)
+        return '{"ok":true}'
+
+    async def test_retire_legacy_room(self) -> str:
+        """Exercise the real cutover and an already-delivered alarm."""
+        from persistence import RoomRepository
+        self.ctx.storage.sql.exec(
+            "UPDATE _sql_schema_migrations SET id = 7, name = 'milestone_6_single_ruleset'"
+        )
+        repository = RoomRepository.from_durable_storage(self.ctx.storage)
+        repository.initialize_schema()
+        await self.alarm()
+        return _json({"scheduledAlarmMs": await self.ctx.storage.getAlarm()})
 
     async def test_connect_player(self, player_token: str) -> str:
         """Mark a bearer connected without constructing a WebSocket proxy."""
