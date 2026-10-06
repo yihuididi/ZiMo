@@ -8,6 +8,7 @@ from typing import Any, Callable, TypeVar
 
 from .actions import DeclareWin, Discard, DomainAction, FinishHand, Kong, KongKind, Pass, Pong
 from .base import GameModel
+from .bao import qualifying_liability, record_liability
 from .capabilities import ROOM_CAPABILITIES
 from .claims import claim_actions, concealed_kongs, winning_claim
 from .effects import (
@@ -66,6 +67,7 @@ from .model import (
     WinSource,
     WindowId,
 )
+from .payments import award_immediate, settle_win
 from .runtime import RandomSource, SystemRandomSource
 from .scoring import WinEvaluation, evaluate_win
 from .tiles import canonical_physical_deck, is_bonus_tile, sort_playable_tiles
@@ -113,8 +115,10 @@ def _complete_tie(state: RoomState, hand: HandState) -> RoomState:
         discards=hand.discards,
         pending_claims=(),
         payments=hand.payments,
+        bao_liabilities=hand.bao_liabilities,
         result=HandResult(
             outcome=HandOutcome.TIE,
+            payments=hand.payments,
             reason="LIVE_WALL_EXHAUSTED",
         ),
     )
@@ -185,9 +189,8 @@ def _validate_tie_result(result: HandResult) -> None:
         or result.fan != 0
         or result.capped_fan != 0
         or result.fan_awards
-        or result.payments
     ):
-        raise InvalidGameStateError("hand result must be an unscored wall tie")
+        raise InvalidGameStateError("hand result must be a wall tie")
 
 
 def _first_hand_id(state: RoomState) -> HandId:
@@ -273,6 +276,7 @@ def _room_with_hand(
     match_data = state.match.model_dump()
     match_data["current_hand"] = hand
     match = MatchState.model_validate(match_data)
+    match, hand = award_immediate(state, match, hand)
     return _rebuild_room(
         state,
         match=match,
@@ -329,6 +333,7 @@ def _win_evaluation(
         winning_tile=None if tile is None else tile.face,
         source=source, prevailing_wind=state.match.prevailing_wind,
         own_wind=_own_wind(state, seat_id), automatic=automatic,
+        minimum_fan=state.config.minimum_fan, config=state.config,
     )
 
 
@@ -342,13 +347,15 @@ def _honor_completion(
         for meld in player.melds if meld.kind in {MeldKind.PONG, MeldKind.KONG}
     }
     automatic = (
-        "ALL_WINDS" if all((TileFamily.WIND, value) in sets for value in ("EAST", "SOUTH", "WEST", "NORTH"))
-        else "ALL_DRAGONS" if all((TileFamily.DRAGON, value) in sets for value in ("RED", "GREEN", "WHITE"))
+        "ALL_WINDS" if state.config.automatic_wind_wins_enabled and all((TileFamily.WIND, value) in sets for value in ("EAST", "SOUTH", "WEST", "NORTH"))
+        else "ALL_DRAGONS" if state.config.automatic_dragon_wins_enabled and all((TileFamily.DRAGON, value) in sets for value in ("RED", "GREEN", "WHITE"))
         else None
     )
     if automatic is None:
         return None
     evaluation = _win_evaluation(state, seat_id, tile=None, source=source, automatic=automatic)
+    if evaluation is None:
+        return None
     return _complete_win(state, seat_id, evaluation, source=source, provider=provider)
 
 
@@ -358,16 +365,26 @@ def _complete_win(
     hand: HandState | None = None,
 ) -> TransitionResult:
     current = state.match.current_hand if hand is None else hand
+    capped = min(evaluation.fan, state.config.maximum_fan)
+    settled_match, current, base = settle_win(
+        state, state.match, current, winner=seat_id, provider=provider,
+        source=source, pattern=evaluation.pattern, capped_fan=capped,
+    )
     complete = _updated(
         current, phase=CompletePhase(), pending_claims=(),
         result=HandResult(
             outcome=HandOutcome.WIN, winner_seat_id=seat_id,
             provider_seat_id=provider, win_source=source,
-            fan=evaluation.fan, capped_fan=min(evaluation.fan, 5),
-            fan_awards=evaluation.awards, payments=(), reason=evaluation.pattern,
+            fan=evaluation.fan, capped_fan=capped, payout_base=base,
+            fan_awards=evaluation.awards, payments=current.payments,
+            settlement=current.settlement,
+            reason=evaluation.pattern,
         ),
     )
-    changed = _room_with_hand(state, complete, pending_deadline=None)
+    changed = _rebuild_room(
+        state, match=settled_match.model_copy(update={"current_hand": complete}),
+        pending_deadline=None,
+    )
     return TransitionResult(
         state=changed,
         domain_events=(WinDeclared(seat_id=seat_id), HandCompleted(result=complete.result)),
@@ -388,6 +405,8 @@ def _flower_completion(state: RoomState) -> TransitionResult | None:
                 state, seat_id, tile=None, source=WinSource.SELF_DRAW,
                 automatic="EIGHT_FLOWERS",
             )
+            if evaluation is None:
+                continue
             return _complete_win(state, seat_id, evaluation, source=WinSource.SELF_DRAW)
         if len(tiles) == 7:
             provider = next((other for other, held in flowers.items() if other != seat_id and held), None)
@@ -410,6 +429,8 @@ def _flower_completion(state: RoomState) -> TransitionResult | None:
                 changed, seat_id, tile=None, source=WinSource.DISCARD,
                 automatic="SEVEN_FLOWERS",
             )
+            if evaluation is None:
+                continue
             completed = _complete_win(
                 changed, seat_id, evaluation, source=WinSource.DISCARD, provider=provider,
             )
@@ -534,6 +555,7 @@ class SingaporeGameEngine:
             hand_history=state.match.hand_history,
             balances=state.match.balances,
         )
+        match, hand = award_immediate(state, match, hand)
         setup_state = _rebuild_room(state, match=match, pending_deadline=None)
         drawn = _flower_completion(setup_state) or self._automatic_draw(setup_state, dealer_seat_id)
         result = TransitionResult(
@@ -557,6 +579,7 @@ class SingaporeGameEngine:
             hand, seat_id, _seats(state),
             prevailing_wind=state.match.prevailing_wind,
             dealer_seat_id=state.match.dealer_seat_id,
+            minimum_fan=state.config.minimum_fan, config=state.config,
         )
 
     @staticmethod
@@ -569,15 +592,21 @@ class SingaporeGameEngine:
             (tile for tile in (*declaring.concealed_tiles, *((declaring.drawn_tile,) if declaring.drawn_tile else ())) if tile.tile_id == phase.tile_id),
             None,
         )
-        if tile is None or not any(
-            meld.kind is MeldKind.PONG and meld.tiles[0].face == tile.face
-            for meld in declaring.melds
-        ):
+        held = (*declaring.concealed_tiles, *((declaring.drawn_tile,) if declaring.drawn_tile else ()))
+        proposed = tuple(t for t in held if t.tile_id in phase.proposed_tile_ids)
+        if (tile is None or len(set(phase.proposed_tile_ids)) != len(phase.proposed_tile_ids)
+                or phase.tile_id not in phase.proposed_tile_ids
+                or len(proposed) != (1 if phase.kong_kind == "KONG_1" else 4)
+                or any(t.face != tile.face for t in proposed)
+                or (phase.kong_kind == "KONG_1" and not any(
+                    meld.kind is MeldKind.PONG and meld.tiles[0].face == tile.face for meld in declaring.melds
+                )) or (phase.kong_kind == "KONG_4" and not state.config.kong_four_robbery_enabled)):
             raise InvalidGameStateError("invalid robbery tile")
         player = _player_hand(hand, seat_id)
         if tile.face in player.passed_game_faces or tile.face == player.last_discard_face:
             return ()
-        if _win_evaluation(state, seat_id, tile=tile, source=WinSource.ROBBED_KONG) is None:
+        evaluation = _win_evaluation(state, seat_id, tile=tile, source=WinSource.ROBBED_KONG)
+        if evaluation is None or (phase.kong_kind == "KONG_4" and evaluation.pattern != "THIRTEEN_WONDERS"):
             return ()
         return (DeclareWin(seat_id=seat_id, window_id=phase.window_id), Pass(seat_id=seat_id, window_id=phase.window_id))
 
@@ -689,11 +718,13 @@ class SingaporeGameEngine:
         elif isinstance(action, FinishHand):
             result = self._finish(state, hand)
         elif isinstance(action, Kong):
-            if action.kind is KongKind.ADDED:
+            if action.kind is KongKind.ADDED or state.config.kong_four_robbery_enabled:
                 window = _robbery_window_id(hand.hand_id, str(action.tile_ids[0]))
                 phase = KongRobberyPhase(
                     window_id=window, declaring_seat_id=action.seat_id,
                     tile_id=action.tile_ids[0], opening_revision=state.revision + 1,
+                    kong_kind="KONG_1" if action.kind is KongKind.ADDED else "KONG_4",
+                    proposed_tile_ids=action.tile_ids,
                 )
                 updated = _updated(hand, phase=phase, pending_claims=())
                 provisional = _room_with_hand(state, updated, pending_deadline=None)
@@ -778,6 +809,7 @@ class SingaporeGameEngine:
                         sequence=sequence,
                         tile=tile,
                         discarded_by_seat_id=action.seat_id,
+                        live_tiles_remaining=len(hand.wall.live_tiles),
                     ),
                 ),
                 pending_claims=(),
@@ -876,6 +908,8 @@ class SingaporeGameEngine:
             evaluation = _win_evaluation(changed, winner.seat_id, tile=discard.tile, source=WinSource.DISCARD)
             if evaluation is None:
                 raise InvalidGameStateError("resolved Game is no longer legal")
+            updated = record_liability(updated, qualifying_liability(state, hand, winner.seat_id, ClaimKind.WIN, evaluation))
+            changed = _room_with_hand(state, updated, pending_deadline=None)
             completion = _complete_win(
                 changed, winner.seat_id, evaluation, source=WinSource.DISCARD,
                 provider=discard.discarded_by_seat_id,
@@ -929,6 +963,7 @@ class SingaporeGameEngine:
                     ),
                 ),
             )
+            updated = record_liability(updated, qualifying_liability(state, hand, winner.seat_id, winner.kind))
             changed = _room_with_hand(state, updated, pending_deadline=None)
             completion = _honor_completion(
                 changed, winner.seat_id, source=WinSource.DISCARD,
@@ -991,17 +1026,20 @@ class SingaporeGameEngine:
                 provider=phase.declaring_seat_id,
             )
         else:
-            meld_index = next(
-                index for index, meld in enumerate(declaring.melds)
-                if meld.kind is MeldKind.PONG and meld.tiles[0].face == tile.face
-            )
-            old = declaring.melds[meld_index]
-            meld = _updated(old, kind=MeldKind.KONG, kong_kind="KONG_1", tiles=(*old.tiles, tile))
+            if phase.kong_kind == "KONG_1":
+                meld_index = next(index for index, meld in enumerate(declaring.melds)
+                                  if meld.kind is MeldKind.PONG and meld.tiles[0].face == tile.face)
+                old = declaring.melds[meld_index]
+                meld = _updated(old, kind=MeldKind.KONG, kong_kind="KONG_1", tiles=(*old.tiles, tile))
+                melds = (*declaring.melds[:meld_index], meld, *declaring.melds[meld_index + 1:])
+            else:
+                meld = MeldState(kind=MeldKind.KONG, kong_kind="KONG_4",
+                                 tiles=tuple(t for t in held if t.tile_id in phase.proposed_tile_ids))
+                melds = (*declaring.melds, meld)
             declaring = _updated(
                 declaring,
-                concealed_tiles=sort_playable_tiles(t for t in declaring.concealed_tiles if t.tile_id != tile.tile_id),
-                drawn_tile=None if declaring.drawn_tile == tile else declaring.drawn_tile,
-                melds=(*declaring.melds[:meld_index], meld, *declaring.melds[meld_index + 1:]),
+                concealed_tiles=sort_playable_tiles(t for t in held if t.tile_id not in phase.proposed_tile_ids),
+                drawn_tile=None, melds=melds,
                 passed_pong_faces=(), passed_game_faces=(),
             )
             updated = _updated(
@@ -1034,10 +1072,10 @@ class SingaporeGameEngine:
         other_has_seven = any(
             sum(tile.face.family in {TileFamily.FLOWER, TileFamily.SEASON} for tile in value.bonus_tiles) == 7
             for value in hand.player_hands if value.seat_id != seat_id
-        )
+        ) and state.config.minimum_fan <= 10
         def flower_complete(held: list[PhysicalTile]) -> bool:
             count = sum(tile.face.family in {TileFamily.FLOWER, TileFamily.SEASON} for tile in held)
-            return count == 8 or (other_has_seven and count > 0)
+            return (count == 8 and state.config.minimum_fan <= 12) or (other_has_seven and count > 0)
         if replacement:
             tile = _replacement_chain(seat_id, live, reserve, bonus, events, stop_on_flower=flower_complete)
         else:
@@ -1273,12 +1311,14 @@ def validate_room(
             )
     if any(is_bonus_tile(d.tile) for d in hand.discards):
         raise InvalidGameStateError("bonus tiles cannot be discarded")
-    if (
-        hand.payments
-        or any(b.points for b in state.match.balances)
-        or state.match.prevailing_wind is not Wind.EAST
-    ):
-        raise InvalidGameStateError("unsupported scoring or round")
+    if state.match.prevailing_wind is not Wind.EAST:
+        raise InvalidGameStateError("unsupported round")
+    balances = {balance.seat_id: 0 for balance in state.match.balances}
+    for payment in hand.payments:
+        balances[payment.payer_seat_id] -= payment.amount
+        balances[payment.recipient_seat_id] += payment.amount
+    if any(balance.points != balances[balance.seat_id] for balance in state.match.balances):
+        raise InvalidGameStateError("balances do not reconcile with the payment ledger")
     if isinstance(hand.phase, DiscardClaimsPhase):
         if (
             hand.phase.window_id
@@ -1296,7 +1336,7 @@ def validate_room(
             if claim_actions(
                 hand, seat, _seats(state),
                 prevailing_wind=state.match.prevailing_wind,
-                dealer_seat_id=state.match.dealer_seat_id,
+                dealer_seat_id=state.match.dealer_seat_id, config=state.config,
             )
         )
         if eligible != hand.phase.eligible_seat_ids:
@@ -1305,7 +1345,7 @@ def validate_room(
             legal = claim_actions(
                 hand, claim.seat_id, _seats(state),
                 prevailing_wind=state.match.prevailing_wind,
-                dealer_seat_id=state.match.dealer_seat_id,
+                dealer_seat_id=state.match.dealer_seat_id, config=state.config,
             )
             if not any(
                 getattr(a, "tile_ids", ()) == claim.tile_ids
@@ -1339,7 +1379,7 @@ def validate_room(
     if isinstance(hand.phase, FinalTileDecisionPhase):
         if hand.wall.live_tiles:
             raise InvalidGameStateError("endgame requires exhausted live wall")
-    elif not isinstance(hand.phase, CompletePhase) and not hand.wall.live_tiles:
+    elif not isinstance(hand.phase, (CompletePhase, KongRobberyPhase)) and not hand.wall.live_tiles:
         raise InvalidGameStateError("active play needs live tiles")
     if isinstance(hand.phase, FinalTileDecisionPhase) and not concealed_kongs(
         _player_hand(hand, hand.phase.seat_id)
@@ -1351,12 +1391,18 @@ def validate_room(
     if hand.result:
         if hand.result.outcome is HandOutcome.TIE:
             _validate_tie_result(hand.result)
+            if hand.result.payments != hand.payments or hand.result.payout_base != 0:
+                raise InvalidGameStateError("tie result must retain the payment ledger")
         elif (
             hand.result.outcome is not HandOutcome.WIN
             or hand.result.fan < 1
-            or hand.result.capped_fan != min(hand.result.fan, 5)
+            or hand.result.capped_fan != min(hand.result.fan, state.config.maximum_fan)
+            or hand.result.fan < state.config.minimum_fan
+            or hand.result.payout_base != state.config.payout_table[hand.result.capped_fan]
             or sum(award.fan for award in hand.result.fan_awards) != hand.result.fan
-            or hand.result.payments
+            or hand.result.payments != hand.payments
+            or hand.result.settlement != hand.settlement
+            or hand.settlement is None
         ):
             raise InvalidGameStateError("invalid winning hand result")
         if require_deadline and state.match.status is not MatchStatus.FINISHED:

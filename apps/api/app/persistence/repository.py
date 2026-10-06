@@ -25,6 +25,7 @@ from .errors import (
     RevisionConflictError,
     RoomAlreadyExistsError,
     RoomNotFoundError,
+    RoomRetiredError,
     SocketTicketUnavailableError,
     UnsupportedSchemaVersionError,
 )
@@ -127,6 +128,7 @@ class RoomRepository:
     ) -> RoomState:
         """Create the canonical room and its supplied projections atomically."""
 
+        self._require_not_retired()
         record = _record_from_state(state)
         state = record.state
         player_records = tuple(players)
@@ -173,6 +175,11 @@ class RoomRepository:
         self._executor.transaction(create)
         return record.state
 
+    def _require_not_retired(self) -> None:
+        rows = _rows(self._executor.exec("SELECT retired FROM room_presence WHERE singleton_id = 1"))
+        if rows and _row_value(rows[0], "retired"):
+            raise RoomRetiredError(RoomRetiredError.message)
+
     def load_room(self) -> RoomState | None:
         """Reconstruct the room from ``room_state`` and no auxiliary table."""
 
@@ -180,6 +187,7 @@ class RoomRepository:
         return None if record is None else record.state
 
     def load_room_record(self) -> RoomStateRecord | None:
+        self._require_not_retired()
         row = self._room_row()
         if row is None:
             return None
@@ -474,6 +482,7 @@ class RoomRepository:
         _require_sha256_hex(token_hash, "token_hash")
 
         def authenticate() -> PlayerRecord | None:
+            self._require_not_retired()
             player = self.get_player_by_token_hash(token_hash)
             if player is None:
                 return None

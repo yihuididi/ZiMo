@@ -6,6 +6,7 @@ from collections import Counter
 from dataclasses import dataclass
 from functools import lru_cache
 
+from .config import GameConfig
 from .model import FanAward, HandState, MeldKind, PlayerHand, TileFace, TileFamily, Wind, WinSource
 from .tiles import ANIMAL_VALUES, DRAGON_VALUES, WIND_VALUES
 
@@ -161,6 +162,14 @@ def _standard_awards(
                 awards.append(FanAward(name="All Chow", fan=1))
     if all(kind in {"PONG", "KONG"} for kind, _ in sets):
         awards.append(FanAward(name="All Pong", fan=2))
+    awards.extend(_color_terminal_awards(all_faces))
+    if not awards:
+        awards.append(FanAward(name="Chicken", fan=0))
+    return awards
+
+
+def _color_terminal_awards(all_faces: list[Face]) -> list[FanAward]:
+    awards: list[FanAward] = []
     families = {face[0] for face in all_faces}
     suit_families = families & SUITS
     if len(suit_families) == 1 and not families & HONORS:
@@ -179,47 +188,57 @@ def _standard_awards(
         awards.append(FanAward(name="All Terminal", fan=9))
     elif half_terminals:
         awards.append(FanAward(name="Half Terminal", fan=2))
-    if not awards:
-        awards.append(FanAward(name="Chicken", fan=0))
     return awards
 
 
 def evaluate_win(
     hand: HandState, player: PlayerHand, *, winning_tile: TileFace | None,
     source: WinSource, prevailing_wind: Wind, own_wind: Wind,
-    automatic: str | None = None,
+    automatic: str | None = None, minimum_fan: int = 1,
+    config: GameConfig | None = None,
 ) -> WinEvaluation | None:
     """Return the best legal default-rule result, or None below minimum fan."""
+    config = config or GameConfig(minimum_fan=minimum_fan)
+    minimum_fan = config.minimum_fan
     concealed = tuple(_face(tile.face) for tile in (*player.concealed_tiles, *((player.drawn_tile,) if player.drawn_tile else ())))
     winning = _face(winning_tile) if winning_tile is not None else None
     if source is not WinSource.SELF_DRAW and winning is not None:
         concealed = (*concealed, winning)
     bonus = _bonus_awards(player, own_wind)
     events = _event_awards(source, replacement=player.last_draw_was_replacement, last_tile=not hand.wall.live_tiles)
+    if config.concealed_self_draw_bonus_enabled and source is WinSource.SELF_DRAW and not player.melds:
+        events.append(FanAward(name="Concealed Self-draw", fan=1))
     honor_sets = {
         (meld.tiles[0].face.family, meld.tiles[0].face.value)
         for meld in player.melds if meld.kind in {MeldKind.PONG, MeldKind.KONG}
     }
     counts = Counter(concealed)
     honor_sets.update(face for face, count in counts.items() if face[0] in HONORS and count >= 3)
+    if ((automatic == "ALL_DRAGONS" and not config.automatic_dragon_wins_enabled)
+            or (automatic == "ALL_WINDS" and not config.automatic_wind_wins_enabled)):
+        automatic = None
     if automatic is None:
-        if all((TileFamily.WIND, value) in honor_sets for value in WIND_VALUES):
+        if config.automatic_wind_wins_enabled and all((TileFamily.WIND, value) in honor_sets for value in WIND_VALUES):
             automatic = "ALL_WINDS"
-        elif all((TileFamily.DRAGON, value) in honor_sets for value in DRAGON_VALUES):
+        elif config.automatic_dragon_wins_enabled and all((TileFamily.DRAGON, value) in honor_sets for value in DRAGON_VALUES):
             automatic = "ALL_DRAGONS"
     candidates: list[tuple[str, list[FanAward]]] = []
     if automatic == "EIGHT_FLOWERS":
         awards = (FanAward(name="Eight Flowers", fan=12),)
-        return WinEvaluation(fan=12, awards=awards, pattern=automatic)
+        return WinEvaluation(fan=12, awards=awards, pattern=automatic) if 12 >= minimum_fan else None
     elif automatic == "SEVEN_FLOWERS":
         awards = (FanAward(name="Seven Flowers", fan=10),)
-        return WinEvaluation(fan=10, awards=awards, pattern=automatic)
+        return WinEvaluation(fan=10, awards=awards, pattern=automatic) if 10 >= minimum_fan else None
     elif automatic == "ALL_DRAGONS":
         awards = (FanAward(name="All Dragons", fan=7), *bonus, *events)
-        return WinEvaluation(fan=sum(award.fan for award in awards), awards=awards, pattern=automatic)
+        total = sum(award.fan for award in awards)
+        return WinEvaluation(fan=total, awards=awards, pattern=automatic) if total >= minimum_fan else None
     elif automatic == "ALL_WINDS":
         awards = (FanAward(name="All Winds", fan=12), *bonus, *events)
-        return WinEvaluation(fan=sum(award.fan for award in awards), awards=awards, pattern=automatic)
+        total = sum(award.fan for award in awards)
+        return WinEvaluation(fan=total, awards=awards, pattern=automatic) if total >= minimum_fan else None
+    if config.seven_pairs_enabled and not player.melds and len(concealed) == 14 and all(count % 2 == 0 for count in counts.values()):
+        candidates.append(("SEVEN_PAIRS", [FanAward(name="Seven Pairs", fan=3), *_color_terminal_awards(list(concealed))]))
     if len(player.melds) == 0 and len(concealed) == 14 and set(concealed) == WONDERS and max(Counter(concealed).values()) == 2:
         candidates.append(("THIRTEEN_WONDERS", [FanAward(name="13 Wonders", fan=8)]))
     for eye, sets in _decompositions(concealed, 4 - len(player.melds)):
@@ -230,7 +249,7 @@ def evaluate_win(
     for pattern, awards in candidates:
         combined = tuple((*awards, *bonus, *events))
         total = sum(award.fan for award in combined)
-        if total >= 1:
+        if total >= minimum_fan:
             evaluated.append(WinEvaluation(fan=total, awards=combined, pattern=pattern))
     if not evaluated:
         return None

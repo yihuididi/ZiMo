@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from app.game import (
     AwaitingDiscardPhase, ClaimKind, DeclareWin, Discard, DiscardState, HandOutcome,
-    Kong, KongKind, KongRobberyPhase, MeldKind, MeldState, SeatId, TileFamily,
+    GameConfig, Kong, KongKind, KongRobberyPhase, MeldKind, MeldState, SeatId, TileFamily,
     WinSource, WallState, Pass, PendingClaim, WindowId, validate_room,
 )
 from app.game.claims import winning_claim
-from app.game.singapore_game import _flower_completion, _room_with_hand, _updated
+from app.game.singapore_game import _complete_tie, _flower_completion, _room_with_hand, _updated
 from app.game.tiles import sort_playable_tiles
 from test_game_claims import started
 from test_game_setup import IdentityRandomSource
@@ -105,7 +105,21 @@ def test_unrobbed_kong_one_upgrades_pong_after_window() -> None:
     assert meld.kind is MeldKind.KONG and meld.kong_kind == "KONG_1"
     assert meld.discard_sequence == 1
     assert resolved.match.current_hand.wall != state.match.current_hand.wall
+    kong_payments = [payment for payment in resolved.match.current_hand.payments if payment.reason.startswith("Kong-1")]
+    assert len(kong_payments) == 3
+    assert all(payment.recipient_seat_id == SeatId("seat-1") for payment in kong_payments)
+    assert sum(balance.points for balance in resolved.match.balances) == 0
     validate_room(resolved)
+
+
+def test_wall_tie_retains_immediate_kong_payments() -> None:
+    engine, state = robbery_room()
+    kong = next(action for action in engine.legal_actions(state, SeatId("seat-1")) if isinstance(action, Kong) and action.kind is KongKind.ADDED)
+    window = engine.transition(state, kong).state
+    paid = engine.resolve_discard_window(window, window.match.current_hand.phase.window_id).state
+    tied = _complete_tie(paid, paid.match.current_hand)
+    assert tied.match.current_hand.result.payments == paid.match.current_hand.payments
+    assert tied.match.balances == paid.match.balances
 
 
 def test_discard_game_beats_pong_and_marks_winning_discard() -> None:
@@ -120,6 +134,14 @@ def test_discard_game_beats_pong_and_marks_winning_discard() -> None:
     assert result.outcome is HandOutcome.WIN and result.win_source is WinSource.DISCARD
     assert resolved.match.current_hand.discards[-1].claim_kind is ClaimKind.WIN
     validate_room(resolved)
+
+
+def test_configured_minimum_fan_removes_below_threshold_game_claim() -> None:
+    engine, state = robbery_room()
+    state = state.model_copy(update={"config": GameConfig(minimum_fan=2)})
+    tile = state.match.current_hand.player_hands[1].drawn_tile
+    window = engine.transition(state, Discard(seat_id=SeatId("seat-1"), tile_id=tile.tile_id)).state
+    assert not any(isinstance(action, DeclareWin) for action in engine.legal_actions(window, SeatId("seat-2")))
 
 
 def test_passing_game_blocks_same_face_until_next_move() -> None:

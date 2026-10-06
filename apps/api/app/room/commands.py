@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 if __package__.startswith("app."):
-    from ..game import GameConfig, PublicRoomView, RoomStatus
+    from ..game import GameConfig, PublicRoomView, RoomStatus, rules_for_id
     from ..lobby import (
         LobbyDomainError,
         apply_lobby_action,
@@ -24,7 +24,7 @@ if __package__.startswith("app."):
         SocketTicketUnavailableError,
     )
 else:  # pragma: no cover - Python Workers load modules from the app directory.
-    from game import GameConfig, PublicRoomView, RoomStatus
+    from game import GameConfig, PublicRoomView, RoomStatus, rules_for_id
     from lobby import (
         LobbyDomainError,
         apply_lobby_action,
@@ -273,6 +273,7 @@ class RoomCommands:
                 *self._gameplay_audit_events(
                     next_state,
                     domain_events,
+                    previous_state=state,
                     created_at_ms=now_ms,
                 ),
             )
@@ -287,6 +288,7 @@ class RoomCommands:
             events = self._gameplay_audit_events(
                 next_state,
                 domain_events,
+                previous_state=state,
                 created_at_ms=now_ms,
             )
             players = None
@@ -361,11 +363,13 @@ class RoomCommands:
                 current_revision=state.revision,
             )
         config = parse_complete_config(config_json)
-        if config != GameConfig():
+        try:
+            config = rules_for_id(state.ruleset_id).normalize_config(config)
+        except (ValueError, TypeError):
             raise RoomServiceError(
                 "invalidConfig",
                 422,
-                "This ruleset does not support custom configuration.",
+                "This ruleset does not support those settings.",
                 current_revision=state.revision,
             )
         try:

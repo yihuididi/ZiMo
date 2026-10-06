@@ -263,8 +263,8 @@ async function createRoom(displayName = "Host") {
   });
   expect(created.view).toMatchObject({
     apiVersion: "2",
-    rulesetVersion: "0.4.0",
-    stateSchemaVersion: 5,
+    rulesetVersion: "0.6.0",
+    stateSchemaVersion: 7,
     roomId: created.roomId,
     viewerPlayerId: created.playerId,
     revision: 0,
@@ -279,6 +279,7 @@ async function createRoom(displayName = "Host") {
       "discardWindow",
       "chow", "pong", "kong1", "kong3", "kong4",
       "game", "fanBreakdown", "kongRobbery",
+      "configurableCoreRules", "payments", "balances", "paymentLedger", "bao", "ruleVariations",
     ],
   });
   expectDisconnected(created.view, created.playerId);
@@ -592,6 +593,8 @@ async function probeRoomRpc(roomName, pathname, body) {
 }
 
 describe("Room snapshot reconstruction", () => {
+
+
   it("keeps the health surface while exposing only native room IDs", async () => {
     const response = await harness.fetch("/health");
     expect(response.status).toBe(200);
@@ -742,6 +745,37 @@ describe("Room HTTP API", () => {
     });
     expect(allowedOrigin.status).toBe(200);
     expectAllowedCors(allowedOrigin);
+  });
+
+  it("accepts only host-edited unified rules through the revisioned config route", async () => {
+    const created = await createRoom("Core rules host");
+    const config = {
+      ...created.view.config,
+      shooterMode: true,
+      sevenPairsEnabled: true,
+      kongFourRobberyEnabled: true,
+      automaticDragonWinsEnabled: false,
+      extraSelfDrawPoints: 3,
+      payoutTable: [1, 3, 6, 12, 24, 48],
+    };
+    const saved = await roomFetch(`/rooms/${created.roomId}/config`, {
+      method: "PATCH", playerToken: created.playerToken,
+      body: { expectedRevision: created.view.revision, config },
+    });
+    expect(saved.status).toBe(200);
+    const result = await responseJson(saved);
+    expect(result.view.config).toMatchObject({ shooterMode: true, payoutTable: config.payoutTable });
+    expect(result.view.revision).toBe(created.view.revision + 1);
+
+    const forbidden = await roomFetch(`/rooms/${created.roomId}/config`, {
+      method: "PATCH", playerToken: created.playerToken,
+      body: {
+        expectedRevision: result.view.revision,
+        config: { ...config, unknownVariation: true },
+      },
+    });
+    expect(forbidden.status).toBe(422);
+    expect((await responseJson(forbidden)).error.code).toBe("invalidRequest");
   });
 
   it("creates, joins, rotates invitations, and returns token-scoped views", async () => {
@@ -2142,5 +2176,20 @@ describe("Durable presence alarms", () => {
     ]) {
       expect(serializedEvents).not.toContain(secret);
     }
+  });
+});
+
+
+describe("Ruleset retirement", () => {
+  it("retires legacy rooms and acknowledges an alarm already in delivery", async () => {
+    const name = "retirement-alarm";
+    const created = await probeRoomRpc(name, "/test/room/create", { displayName: "Retiring Host" });
+    expect(created.ok).toBe(true);
+    const retired = await probeRoomRpc(name, "/test/retire-legacy-room", {});
+    expect(retired.scheduledAlarmMs).toBeNull();
+    await runtimeWorker.evictDurableObject("GAME_ROOM", { name });
+    const view = await probeRoomRpc(name, "/test/room/view", { playerToken: created.data.playerToken });
+    expect(view.ok).toBe(false);
+    expect(view.error.code).toBe("roomRetired");
   });
 });

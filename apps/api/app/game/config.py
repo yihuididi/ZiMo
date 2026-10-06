@@ -8,7 +8,7 @@ from .base import GameModel
 
 
 class GameConfig(GameModel):
-    """Normalized settings reserved for future Singapore game features."""
+    """Normalized Singapore settings for the current single-hand ruleset."""
 
     shooter_mode: bool = False
     minimum_fan: int = Field(default=1, gt=0)

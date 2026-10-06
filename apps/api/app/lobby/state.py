@@ -170,6 +170,8 @@ def update_lobby_config(
     now_ms: int,
 ) -> LobbyTransition:
     _require_pre_match(room)
+    if room.status is not RoomStatus.WAITING_FOR_PLAYERS:
+        raise LobbyDomainError("ROOM_CLOSED", "Unready before editing rules")
     actor_id = (
         actor_player_id
         if isinstance(actor_player_id, PlayerId)
@@ -188,6 +190,8 @@ def authorize_lobby_config(
     """Validate config mutation authority before parsing proposal contents."""
 
     _require_pre_match(room)
+    if room.status is not RoomStatus.WAITING_FOR_PLAYERS:
+        raise LobbyDomainError("ROOM_CLOSED", "Unready before editing rules")
     actor_id = (
         actor_player_id
         if isinstance(actor_player_id, PlayerId)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from .config import GameConfig
 from .actions import Chow, DeclareWin, DomainAction, Kong, KongKind, Pass, Pong
 from .model import (
     ClaimKind,
@@ -61,6 +62,7 @@ def concealed_kongs(player: PlayerHand) -> tuple[Kong, ...]:
 def claim_actions(
     hand: HandState, seat_id: SeatId, seats: tuple[SeatId, ...],
     *, prevailing_wind: Wind = Wind.EAST, dealer_seat_id: SeatId | None = None,
+    minimum_fan: int = 1, config: GameConfig | None = None,
 ) -> tuple[DomainAction, ...]:
     phase = hand.phase
     if not isinstance(phase, DiscardClaimsPhase):
@@ -85,6 +87,7 @@ def claim_actions(
     if face not in player.passed_game_faces and face != player.last_discard_face and evaluate_win(
         hand, player, winning_tile=face, source=WinSource.DISCARD,
         prevailing_wind=prevailing_wind, own_wind=own_wind,
+        minimum_fan=minimum_fan, config=config,
     ) is not None:
         actions.append(DeclareWin(seat_id=seat_id, window_id=phase.window_id))
     if len(matching) == 3:

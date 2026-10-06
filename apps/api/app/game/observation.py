@@ -13,6 +13,7 @@ from .capabilities import (
 )
 from .config import GameConfig
 from .model import (
+    BaoLiability,
     AutomatedSeatController,
     AwaitingDiscardPhase,
     AwaitingDrawPhase,
@@ -33,6 +34,7 @@ from .model import (
     RoomState,
     RoomStatus,
     SeatBalance,
+    Payment,
     SeatId,
     SetupPhase,
     Wind,
@@ -105,6 +107,7 @@ class PhaseObservation(GameModel):
     window_id: WindowId | None = None
     discard_sequence: int | None = Field(default=None, ge=1)
     declaring_seat_id: SeatId | None = None
+    kong_kind: Literal["KONG_1", "KONG_4"] | None = None
 
 
 class MatchObservation(GameModel):
@@ -116,6 +119,8 @@ class MatchObservation(GameModel):
     reserve_wall_tile_count: int = Field(default=0, ge=0)
     discards: tuple[PublicDiscardView, ...] = ()
     balances: tuple[SeatBalance, ...] = ()
+    payments: tuple[Payment, ...] = ()
+    bao_liabilities: tuple[BaoLiability, ...] = ()
     own_pending_claims: tuple[PendingClaim, ...] = ()
     result: HandResult | None = None
     match_result: MatchResult | None = None
@@ -197,6 +202,7 @@ def _phase_observation(phase: object) -> PhaseObservation:
             type="kongRobbery",
             window_id=phase.window_id,
             declaring_seat_id=phase.declaring_seat_id,
+            kong_kind=phase.kong_kind,
         )
     if isinstance(phase, FinalTileDecisionPhase):
         return PhaseObservation(type="finalTileDecision", active_seat_id=phase.seat_id)
@@ -298,6 +304,8 @@ def build_seat_observation(
                 else ()
             ),
             balances=room.match.balances,
+            payments=hand.payments if hand else (),
+            bao_liabilities=hand.bao_liabilities if hand else (),
             own_pending_claims=(
                 tuple(
                     claim

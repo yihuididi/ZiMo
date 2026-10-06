@@ -14,6 +14,7 @@ from .capabilities import (
 )
 from .config import GameConfig
 from .model import (
+    BaoLiability,
     HandResult,
     MatchStatus,
     MatchResult,
@@ -23,6 +24,7 @@ from .model import (
     RoomState,
     RoomStatus,
     SeatBalance,
+    Payment,
     SeatId,
     Wind,
     WindowId,
@@ -130,14 +132,16 @@ class PublicGameView(GameModel):
     reserve_wall_tile_count: int = Field(default=0, ge=0)
     discards: tuple[PublicDiscardView, ...] = ()
     balances: tuple[SeatBalance, ...] = ()
+    payments: tuple[Payment, ...] = ()
+    bao_liabilities: tuple[BaoLiability, ...] = ()
     result: HandResult | None = None
     match_result: MatchResult | None = None
 
 
 class PublicRoomView(GameModel):
     api_version: Literal["2"] = "2"
-    ruleset_version: Literal["0.4.0"] = "0.4.0"
-    state_schema_version: Literal[5] = 5
+    ruleset_version: Literal["0.6.0"] = "0.6.0"
+    state_schema_version: Literal[7] = 7
     room_id: RoomId
     revision: int = Field(ge=0)
     presence_version: int = Field(default=0, ge=0)
@@ -257,6 +261,8 @@ def build_public_room_view(
             reserve_wall_tile_count=match.reserve_wall_tile_count,
             discards=match.discards,
             balances=match.balances,
+            payments=match.payments,
+            bao_liabilities=match.bao_liabilities,
             result=match.result,
             match_result=match.match_result,
         )

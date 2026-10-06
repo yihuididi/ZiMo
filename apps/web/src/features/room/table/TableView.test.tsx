@@ -49,6 +49,24 @@ describe("Game table", () => {
     expect(positioned.left?.seatId).toBe("seat-1");
   });
 
+  it("shows server balances and immediate payment reasons during play", () => {
+    const base = activeTableView();
+    renderTable(activeTableView({ game: {
+      ...base.game!,
+      balances: base.game!.balances.map(balance => ({
+        ...balance, points: balance.seatId === "seat-0" ? -2 : balance.seatId === "seat-2" ? 2 : 0,
+      })),
+      payments: [{
+        sequence: 1, payerSeatId: "seat-0", recipientSeatId: "seat-2",
+        amount: 2, reason: "Flower/season pair 1",
+      }],
+    } }));
+    const panel = screen.getByRole("region", { name: "Scores and payments" });
+    expect(panel).toHaveTextContent("-2");
+    expect(panel).toHaveTextContent("+2");
+    expect(panel).toHaveTextContent("Flower/season pair 1");
+  });
+
   it("renders the authoritative table, concealment, bonuses, and server-order hand", () => {
     const view = activeTableView();
     renderTable(view);
@@ -93,7 +111,7 @@ describe("Game table", () => {
     expect(screen.getByRole("img", { name: "North Wind" })).toBeVisible();
 
     expect(screen.getByLabelText("Preview limitations")).toHaveTextContent(
-      "Game and fan are available. Payments, editable settings, and additional hands",
+      "Bao, rule variations, and payments are live. Additional hands arrive later.",
     );
     expect(document.body.innerHTML).not.toContain("opaque-discard");
     expect(document.body.innerHTML).not.toContain("tileId");
@@ -211,6 +229,7 @@ describe("Game table", () => {
             winSource: null,
             fan: 0,
             cappedFan: 0,
+            payoutBase: 0,
             fanAwards: [],
             payments: [],
             reason: "Wall exhausted",
@@ -240,7 +259,7 @@ describe("Game table", () => {
         ...base.game!, status: "FINISHED",
         result: {
           outcome: "WIN", winnerSeatId: "seat-0", providerSeatId: null,
-          winSource: "SELF_DRAW", fan: 6, cappedFan: 5,
+          winSource: "SELF_DRAW", fan: 6, cappedFan: 5, payoutBase: 32,
           fanAwards: [{ name: "All Pong", fan: 2 }, { name: "Full Color", fan: 4 }],
           payments: [], reason: "STANDARD",
         },
@@ -276,7 +295,7 @@ describe("Claim actions at the table", () => {
     fireEvent.click(chows[1]);
     expect(onRunAction).toHaveBeenCalledWith(view.actions[1]);
     expect(within(choices).getByRole("button", { name: "Pass" })).toBeEnabled();
-    expect(screen.getByLabelText("Preview limitations")).toHaveTextContent("Game and fan are available");
+    expect(screen.getByLabelText("Preview limitations")).toHaveTextContent("Bao, rule variations, and payments are live");
     expect(screen.queryByRole("button", { name: "Game" })).not.toBeInTheDocument();
   });
 

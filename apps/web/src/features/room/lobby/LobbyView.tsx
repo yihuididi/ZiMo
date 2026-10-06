@@ -29,6 +29,7 @@ interface LobbyViewProps {
   feedback: CommandFeedback[];
   onRunAction: (action: OpaqueActionDescriptor) => void;
   onRetryAction: (actionId: string) => void;
+  onConfigSaved: (view: PublicRoomView) => void;
 }
 
 export function LobbyView({
@@ -42,6 +43,7 @@ export function LobbyView({
   feedback,
   onRunAction,
   onRetryAction,
+  onConfigSaved,
 }: LobbyViewProps) {
   useDocumentTitle(`Room lobby · ZiMo Mahjong`);
 
@@ -97,7 +99,7 @@ export function LobbyView({
             <SeatList view={view} />
           </section>
 
-          <RulesCard view={view} />
+          <RulesCard view={view} roomId={roomId} playerToken={session.playerToken} onSaved={onConfigSaved} />
         </div>
 
         <aside className="side-column">

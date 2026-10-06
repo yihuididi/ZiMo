@@ -148,22 +148,15 @@ class GameConfigTests(unittest.TestCase):
         self.assertEqual(rules.reserve_tile_count, 15)
         self.assertEqual(rules.claim_window_ms, 3000)
         self.assertEqual(rules.capabilities, ROOM_CAPABILITIES)
-        self.assertEqual(rules.configurable_fields, ())
+        self.assertEqual(set(rules.configurable_fields), set(GameConfig.model_fields))
 
-    def test_rules_reject_future_config_until_a_capability_enables_it(self) -> None:
+    def test_rules_accept_all_supported_variations(self) -> None:
         rules = SingaporeRules()
         self.assertEqual(rules.normalize_config(GameConfig()), GameConfig())
         future_config = GameConfig(shooter_mode=True)
         self.assertTrue(future_config.shooter_mode)
-        with self.assertRaises(UnsupportedConfigurationError):
-            rules.normalize_config(future_config)
-        with self.assertRaises(UnsupportedConfigurationError):
-            rules.normalize_config(
-                {
-                    **GameConfig().model_dump(),
-                    "seven_pairs_enabled": True,
-                }
-            )
+        self.assertEqual(rules.normalize_config(future_config), future_config)
+        self.assertTrue(rules.normalize_config({**GameConfig().model_dump(), "seven_pairs_enabled": True}).seven_pairs_enabled)
 
     def test_capabilities_cannot_be_overridden(self) -> None:
         with self.assertRaises(ValidationError):
@@ -171,28 +164,10 @@ class GameConfigTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             SingaporeRules.model_validate({"configurable_fields": ("shooterMode",)})
 
-    def test_room_snapshot_cannot_bypass_config_capability_gate(self) -> None:
-        with self.assertRaises(ValidationError):
-            RoomState(
-                room_id=RoomId("room-config-bypass"),
-                config=GameConfig(shooter_mode=True),
-                seats=standard_seats(),
-                created_at_ms=0,
-                updated_at_ms=0,
-            )
-        valid = RoomState(
-            room_id=RoomId("room-copy-bypass"),
-            seats=standard_seats(),
-            created_at_ms=0,
-            updated_at_ms=0,
-        )
-        unvalidated_copy = valid.model_copy(
-            update={"config": GameConfig(shooter_mode=True)}
-        )
-        with self.assertRaises(ValueError):
-            unvalidated_copy.canonical_json()
-        with self.assertRaises(ValueError):
-            canonical_json(unvalidated_copy)
+    def test_room_snapshot_accepts_supported_variations(self) -> None:
+        room = RoomState(room_id=RoomId("room-variations"), config=GameConfig(seven_pairs_enabled=True),
+                         seats=standard_seats(), created_at_ms=0, updated_at_ms=0)
+        self.assertEqual(RoomState.model_validate_json(room.canonical_json()), room)
 
     def test_exported_canonical_json_supports_non_domain_models(self) -> None:
         class OrdinaryModel(BaseModel):
@@ -775,8 +750,8 @@ class SnapshotAndEngineTests(unittest.TestCase):
     def test_canonical_camel_case_json_round_trip(self) -> None:
         encoded = self.room.canonical_json()
         self.assertIn('"roomId":"room-1"', encoded)
-        self.assertIn('"rulesetVersion":"0.4.0"', encoded)
-        self.assertIn('"stateSchemaVersion":5', encoded)
+        self.assertIn('"rulesetVersion":"0.6.0"', encoded)
+        self.assertIn('"stateSchemaVersion":7', encoded)
         self.assertEqual(deserialize_room_state(encoded), self.room)
         self.assertEqual(list(json.loads(encoded)), sorted(json.loads(encoded)))
 

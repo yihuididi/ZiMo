@@ -116,6 +116,7 @@ class RoomCreationAndAuthenticationTests(RoomOrchestratorTestCase):
                 "discardWindow",
                 "chow", "pong", "kong1", "kong3", "kong4",
                 "game", "fanBreakdown", "kongRobbery",
+                "configurableCoreRules", "payments", "balances", "paymentLedger", "bao", "ruleVariations",
             ),
         )
 
@@ -625,7 +626,7 @@ class RoomCommandTests(RoomOrchestratorTestCase):
             lambda: self.service.update_config(created.player_token, 0, "{}"),
         )
         changed = GameConfig().canonical_data()
-        changed["shooterMode"] = True
+        changed["unknownVariation"] = True
         self.assert_service_error(
             422,
             "invalidConfig",
@@ -634,7 +635,6 @@ class RoomCommandTests(RoomOrchestratorTestCase):
                 0,
                 json.dumps(changed, separators=(",", ":"), sort_keys=True),
             ),
-            current_revision=0,
         )
 
         joined = self.service.join_room(created.invite_token, "Member")
@@ -644,6 +644,25 @@ class RoomCommandTests(RoomOrchestratorTestCase):
             lambda: self.service.update_config(joined.player_token, 1, defaults),
             current_revision=1,
         )
+
+    def test_core_config_edit_is_revisioned_and_clears_readiness(self) -> None:
+        created = self.create()
+        self.service.player_connected(created.player_id, 0)
+        ready = self.service.execute_command(
+            created.player_token, "ready-before-config", 0,
+            descriptor_id(created.view, "Ready"),
+        )
+        self.assertTrue(ready.view.players[0].ready)
+        proposal = GameConfig(shooter_mode=True, payout_table=(1, 3, 6, 12, 24, 48), fresh_discard_threshold=7)
+        result = self.service.update_config(
+            created.player_token, ready.view.revision, proposal.canonical_json(),
+        )
+        self.assertEqual(result.view.revision, ready.view.revision + 1)
+        self.assertTrue(result.view.config.shooter_mode)
+        self.assertEqual(result.view.config.payout_table[5], 48)
+        self.assertEqual(result.view.config.fresh_discard_threshold, 7)
+        self.assertFalse(result.view.players[0].ready)
+        self.assertEqual(self.repository.load_room().config, proposal)
 
     def test_leave_revokes_player_token_and_live_ticket_atomically(self) -> None:
         created = self.create()

@@ -221,7 +221,7 @@ function PhaseStatus({ view }: { view: PublicRoomView }) {
   if ((phase?.type === "discardClaims" || phase?.type === "kongRobbery") && view.deadlineMs !== null) {
     return (
       <div className="phase-status phase-window">
-        <span>{phase.type === "kongRobbery" ? "Kong-1 may be robbed for Game." : "Every discard rests for the full claim window."}</span>
+        <span>{phase.type === "kongRobbery" ? (phase.kongKind === "KONG_4" ? "Kong-4 may be robbed only for 13 Wonders." : "Kong-1 may be robbed for Game.") : "Every discard rests for the full claim window."}</span>
         <strong role="timer" aria-label={phase.type === "kongRobbery" ? "Robbery window countdown" : "Discard window countdown"}>
           {countdown.resolving
             ? "Resolving…"
@@ -344,19 +344,44 @@ export function TableView({
 
       <aside className="preview-notice" aria-label="Preview limitations">
         <strong>One-hand preview</strong>
-        <span>Game and fan are available. Payments, editable settings, and additional hands are coming later.</span>
+        <span>Bao, rule variations, and payments are live. Additional hands arrive later.</span>
       </aside>
 
       <PhaseStatus view={view} />
+      {!!view.game?.baoLiabilities?.length && <section className="panel fan-result" aria-label="Bao liabilities">
+        <h2>Bao liabilities</h2>
+        <ul>{view.game.baoLiabilities.map(bao => <li key={bao.beneficiarySeatId}>
+          <span>{occupantName(view.seats.find(seat => seat.seatId === bao.feederSeatId) ?? null)} pays all for {occupantName(view.seats.find(seat => seat.seatId === bao.beneficiarySeatId) ?? null)} on self-draw or their winning discard. {bao.reasons.map(baoLabel).join(" · ")}</span>
+        </li>)}</ul>
+      </section>}
       {view.game?.status === "FINISHED" && view.game.result?.outcome === "WIN" && (
         <section className="panel fan-result" aria-label="Winning fan breakdown">
           <h2>Winning hand</h2>
-          <p>{view.game.result.winSource === "SELF_DRAW" ? "Self draw" : view.game.result.winSource === "ROBBED_KONG" ? "Robbed Kong-1" : "Discard Game"} · {view.game.result.fan} raw fan · {view.game.result.cappedFan} capped fan</p>
+          <p>{view.game.result.winSource === "SELF_DRAW" ? "Self draw" : view.game.result.winSource === "ROBBED_KONG" ? (view.game.result.settlement?.robbedKongKind === "KONG_4" ? "Robbed Kong-4" : "Robbed Kong-1") : "Discard Game"} · {view.game.result.fan} raw fan · {view.game.result.cappedFan} capped fan · Base payout {view.game.result.payoutBase}</p>
           <ul>{view.game.result.fanAwards.map((award, index) => (
             <li key={`${award.name}-${index}`}><span>{award.name}</span><strong>{award.fan}</strong></li>
           ))}</ul>
+          {view.game.result.settlement && <div className="settlement-explanation" aria-label="Settlement explanation">
+            <p>Baseline: {view.game.result.settlement.baseline.map(payer => `${occupantName(view.seats.find(seat => seat.seatId === payer.seatId) ?? null)} pays ${payer.amount}`).join(" · ")}</p>
+            {view.game.result.settlement.liability && <p>Bao: {view.game.result.settlement.liability.reasons.map(baoLabel).join(" · ")}. This replaces the baseline charges.</p>}
+            <p>Final: {view.game.result.settlement.final.map(payer => `${occupantName(view.seats.find(seat => seat.seatId === payer.seatId) ?? null)} pays ${payer.amount}`).join(" · ")}</p>
+          </div>}
         </section>
       )}
+      {view.game && <section className="panel fan-result" aria-label="Scores and payments">
+        <h2>Scores and payments</h2>
+        <ul className="scoreboard-list">{view.game.balances.map(balance => <li key={balance.seatId}>
+          <span>{occupantName(view.seats.find(seat => seat.seatId === balance.seatId) ?? null)}</span>
+          <strong>{balance.points > 0 ? "+" : ""}{balance.points}</strong>
+        </li>)}</ul>
+        <details>
+          <summary>Payment ledger · {view.game.payments.length} transfers</summary>
+          {view.game.payments.length === 0 ? <p>No payments yet.</p> : <ol className="payment-ledger">{view.game.payments.map(payment => <li key={payment.sequence}>
+            <span><small>{payment.reason}</small>{occupantName(view.seats.find(seat => seat.seatId === payment.payerSeatId) ?? null)} → {occupantName(view.seats.find(seat => seat.seatId === payment.recipientSeatId) ?? null)}</span>
+            <strong>{payment.amount}</strong>
+          </li>)}</ol>}
+        </details>
+      </section>}
       {(choiceActions.length > 0 || view.game?.ownClaimSubmitted) && (
         <section className="table-choices" aria-label="Table choices">
           {view.game?.ownClaimSubmitted
@@ -443,4 +468,8 @@ export function TableView({
       )}
     </main>
   );
+}
+
+function baoLabel(reason: string): string {
+  return ({ DRAGONS: "Dragon completion", WINDS: "Wind completion", VISIBLE_FAN_LIMIT: "Visible fan limit", FULL_COLOR: "Full Color", FRESH_DISCARD: "Fresh winning discard" } as Record<string, string>)[reason] ?? reason;
 }

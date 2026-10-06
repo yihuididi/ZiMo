@@ -34,27 +34,19 @@ class SingaporeRules(GameModel):
         return ROOM_CAPABILITIES
 
     @property
-    def configurable_fields(self) -> tuple[()]:
-        return ()
+    def configurable_fields(self) -> tuple[str, ...]:
+        return tuple(sorted(GameConfig.model_fields))
 
     def default_config(self) -> GameConfig:
         return GameConfig()
 
     def normalize_config(self, value: GameConfig | dict[str, object]) -> GameConfig:
-        normalized = GameConfig.normalized(value)
-        if normalized != GameConfig():
-            raise UnsupportedConfigurationError(
-                "this ruleset does not advertise configurable game settings"
-            )
-        return normalized
+        return GameConfig.normalized(value)
 
     def validate_snapshot(self, room: RoomState) -> None:
         if room.ruleset_id != self.ruleset_id:
             raise ValueError("room snapshot ruleset is incompatible with SingaporeRules")
-        if room.config != GameConfig():
-            raise UnsupportedConfigurationError(
-                "ruleset snapshot contains unsupported configuration"
-            )
+        self.normalize_config(room.config)
         validate_room(room, require_deadline=True)
 
     def supports(self, capability: str) -> bool:

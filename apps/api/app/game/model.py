@@ -276,6 +276,7 @@ class DiscardState(GameModel):
     sequence: int = Field(ge=1)
     tile: PhysicalTile
     discarded_by_seat_id: SeatId = Field(min_length=1)
+    live_tiles_remaining: int = Field(default=0, ge=0)
     claimed_by_seat_id: SeatId | None = None
     claim_kind: ClaimKind | None = None
 
@@ -314,6 +315,51 @@ class PendingClaim(GameModel):
         return self
 
 
+BaoReason: TypeAlias = Literal["DRAGONS", "WINDS", "VISIBLE_FAN_LIMIT", "FULL_COLOR", "FRESH_DISCARD"]
+
+
+class BaoLiability(GameModel):
+    beneficiary_seat_id: SeatId
+    feeder_seat_id: SeatId
+    reasons: tuple[BaoReason, ...] = Field(min_length=1)
+    discard_sequence: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def validate_liability(self) -> "BaoLiability":
+        if self.beneficiary_seat_id == self.feeder_seat_id:
+            raise ValueError("Bao parties must differ")
+        if len(self.reasons) != len(set(self.reasons)):
+            raise ValueError("Bao reasons must be unique")
+        return self
+
+
+class PayerAmount(GameModel):
+    seat_id: SeatId
+    amount: int = Field(gt=0)
+
+
+class Settlement(GameModel):
+    baseline: tuple[PayerAmount, ...]
+    liability: BaoLiability | None = None
+    final: tuple[PayerAmount, ...]
+    robbed_kong_kind: Literal["KONG_1", "KONG_4"] | None = None
+
+    @model_validator(mode="after")
+    def validate_totals(self) -> "Settlement":
+        if not self.baseline or not self.final:
+            raise ValueError("settlement requires payer allocations")
+        for allocation in (self.baseline, self.final):
+            if len({p.seat_id for p in allocation}) != len(allocation):
+                raise ValueError("settlement payer must be unique")
+        if sum(p.amount for p in self.baseline) != sum(p.amount for p in self.final):
+            raise ValueError("Bao must preserve the baseline total")
+        if self.liability is None and self.baseline != self.final:
+            raise ValueError("only Bao may redirect the baseline")
+        if self.liability and tuple(p.seat_id for p in self.final) != (self.liability.feeder_seat_id,):
+            raise ValueError("Bao settlement must charge only its feeder")
+        return self
+
+
 class Payment(GameModel):
     sequence: int = Field(ge=1)
     payer_seat_id: SeatId = Field(min_length=1)
@@ -340,14 +386,16 @@ class HandResult(GameModel):
     win_source: WinSource | None = None
     fan: int = Field(default=0, ge=0)
     capped_fan: int = Field(default=0, ge=0)
+    payout_base: int = Field(default=0, ge=0)
+    settlement: Settlement | None = None
     fan_awards: tuple[FanAward, ...] = ()
     payments: tuple[Payment, ...] = ()
     reason: str | None = Field(default=None, min_length=1, max_length=256)
 
     @model_validator(mode="after")
     def validate_outcome(self) -> "HandResult":
-        if self.capped_fan != min(self.fan, 5):
-            raise ValueError("capped fan must use the fixed five-fan limit")
+        if self.capped_fan > self.fan:
+            raise ValueError("capped fan cannot exceed raw fan")
         if self.outcome is HandOutcome.WIN:
             if self.winner_seat_id is None or self.win_source is None:
                 raise ValueError("a winning result requires a winner and win source")
@@ -408,6 +456,8 @@ class KongReplacementPhase(GameModel):
 
 
 class KongRobberyPhase(GameModel):
+    kong_kind: Literal["KONG_1", "KONG_4"] = "KONG_1"
+    proposed_tile_ids: tuple[TileId, ...] = ()
     opening_revision: int | None = Field(default=None, ge=0)
     type: Literal["kongRobbery"] = "kongRobbery"
     window_id: WindowId = Field(min_length=1)
@@ -492,11 +542,24 @@ class HandState(GameModel):
     pending_claims: tuple[PendingClaim, ...] = ()
     payments: tuple[Payment, ...] = ()
     result: HandResult | None = None
+    bao_liabilities: tuple[BaoLiability, ...] = ()
+    settlement: Settlement | None = None
 
     @model_validator(mode="after")
     def validate_hand(self) -> "HandState":
         seat_ids = _validate_hand_shape_and_sequences(self)
         seat_id_set = set(seat_ids)
+        beneficiaries = [b.beneficiary_seat_id for b in self.bao_liabilities]
+        if len(beneficiaries) != len(set(beneficiaries)):
+            raise ValueError("only one Bao feeder per beneficiary")
+        for liability in self.bao_liabilities:
+            if not {liability.beneficiary_seat_id, liability.feeder_seat_id} <= seat_id_set:
+                raise ValueError("Bao references an unknown seat")
+            if liability.discard_sequence > len(self.discards):
+                raise ValueError("Bao references an unknown discard")
+            discard = self.discards[liability.discard_sequence - 1]
+            if discard.discarded_by_seat_id != liability.feeder_seat_id or discard.claimed_by_seat_id != liability.beneficiary_seat_id:
+                raise ValueError("Bao disagrees with its claimed discard")
         _validate_hand_phase_references(self, seat_id_set)
         _validate_pending_claims(self, seat_id_set)
         _validate_payment_and_result_references(self, seat_id_set)
@@ -596,8 +659,26 @@ def _validate_payment_and_result_references(
         for payment in hand.payments
     ):
         raise ValueError("payment references an unknown seat")
+    if hand.settlement is not None:
+        if hand.result is None or hand.result.outcome is not HandOutcome.WIN:
+            raise ValueError("settlement requires a winning result")
+        settlement = hand.settlement
+        winner = hand.result.winner_seat_id
+        if any(p.seat_id not in seat_id_set or p.seat_id == winner
+               for p in (*settlement.baseline, *settlement.final)):
+            raise ValueError("settlement references an invalid payer")
+        if settlement.liability is not None and (
+            settlement.liability not in hand.bao_liabilities
+            or settlement.liability.beneficiary_seat_id != winner
+        ):
+            raise ValueError("settlement liability must belong to the winner")
+        tail = hand.payments[-len(settlement.final):]
+        if tuple((p.payer_seat_id, p.amount) for p in tail) != tuple((p.seat_id, p.amount) for p in settlement.final) or any(p.recipient_seat_id != winner for p in tail):
+            raise ValueError("settlement must reconcile with final ledger transfers")
     if hand.result is None:
         return
+    if hand.result.settlement != hand.settlement:
+        raise ValueError("hand and result settlements must agree")
     if any(
         seat_id is not None and seat_id not in seat_id_set
         for seat_id in (hand.result.winner_seat_id, hand.result.provider_seat_id)
@@ -825,8 +906,8 @@ class MatchState(GameModel):
 class RoomState(GameModel):
     room_id: RoomId = Field(min_length=1)
     ruleset_id: str = Field(default="singapore", min_length=1)
-    ruleset_version: Literal["0.4.0"] = "0.4.0"
-    state_schema_version: Literal[5] = 5
+    ruleset_version: Literal["0.6.0"] = "0.6.0"
+    state_schema_version: Literal[7] = 7
     revision: int = Field(default=0, ge=0)
     config: GameConfig = Field(default_factory=GameConfig)
     status: RoomStatus = RoomStatus.CREATED
@@ -838,12 +919,8 @@ class RoomState(GameModel):
     updated_at_ms: int = Field(ge=0)
 
     def canonical_data(self) -> dict[str, Any]:
-        # ``model_copy(update=...)`` intentionally skips Pydantic validation.
-        # Recheck the configuration gate at the persistence boundary.
-        if self.config != GameConfig():
-            raise ValueError(
-                "Singapore one-hand rules cannot serialize unsupported game configuration"
-            )
+        from .rules import rules_for_id
+        rules_for_id(self.ruleset_id).normalize_config(self.config)
         data = super().canonical_data()
         return data
 
@@ -852,10 +929,7 @@ class RoomState(GameModel):
         from .rules import rules_for_id
 
         rules_for_id(self.ruleset_id)
-        if self.config != GameConfig():
-            raise ValueError(
-                "Singapore one-hand rules do not permit non-default game configuration"
-            )
+        rules_for_id(self.ruleset_id).normalize_config(self.config)
         if len(self.seats) != 4:
             raise ValueError("a room requires exactly four stable seat slots")
         slots = [seat.slot for seat in self.seats]

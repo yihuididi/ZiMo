@@ -12,7 +12,7 @@ The primary audience is friends who already know Singapore Mahjong, confirmed by
 
 ## Product Purpose
 
-ZiMo provides a private Singapore Mahjong table in a web browser where friends can join a room and play alongside bots. The current implementation plays one complete hand with winning and fan evaluation.
+ZiMo provides a private Singapore Mahjong table in a web browser where friends can join a room and play alongside bots. The current implementation plays one scored hand with winning, fan evaluation, configurable core rules, and a payment ledger.
 
 ## Operating Context
 
@@ -27,8 +27,8 @@ The following describes the current implementation documented in README.md, rath
 - Room and game state are controlled by the server and updated in real time.
 - Draws and bonus-tile replacements happen automatically; the player chooses a discard.
 - Each discard opens a three-second resolution window.
-- Chow, Pong, Kong-1/3/4, Game, and Pass are available in new rooms. Claim choices are final and resolve after the full three-second window. Kong-4 faces are public, and Kong-1 can be robbed for Game.
-- The server evaluates standard and special wins and shows the winner's fan breakdown. Payments, editable settings, and additional hands remain unavailable.
+- Chow, Pong, Kong-1/3/4, Game, and Pass are available in new rooms. Claim choices are final and resolve after the full three-second window. Kong-4 faces are public, and Kong-1 can be robbed for Game; optional Kong-4 robbery allows only 13 Wonders.
+- The server evaluates standard and special wins, applies immediate and final payments, and shows the winner's fan breakdown and current balances. The host can edit payment and variation settings while waiting for players; a ready host must unready before editing. Bao and optional variations are supported; additional hands remain unavailable.
 
 Open decisions: relative priority of convenient private play versus rules completeness and familiar table interactions; future feature scope; product-specific accessibility requirements; and any competitive positioning or success metrics.
 
